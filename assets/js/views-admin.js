@@ -51,6 +51,18 @@
     return filter && filter !== 'all' ? [filter] : allSiteIds();
   }
 
+  function contractFilter(selected, onChange) {
+    var list = C.Data.contracts();
+    var sel = h('select', {
+      onchange: function () { onChange(sel.value); }, style: { minWidth: '230px' }
+    }, [h('option', { value: 'all', selected: selected === 'all' },
+      'Все контракты' + (list.length ? ' (' + list.length + ')' : ''))]
+      .concat(list.map(function (c) {
+        return h('option', { value: c.id, selected: c.id === selected }, c.name);
+      })));
+    return sel;
+  }
+
   /* ===================== ОБЗОР ПО УПРАВЛЕНИЮ ===================== */
 
   function viewDash(params) {
@@ -700,22 +712,31 @@
     var to = params.to || C.todayKey();
     var from = params.from || to;
     var filter = params.site || 'all';
+    var contract = params.contract || 'all';
     var tab = params.tab || 'sites';
     var months = C.monthRange(from, to);
     var siteIds = resolveSites(filter);
-    var agg = C.Calc.aggregate(siteIds, months);
+    var agg = C.Calc.aggregate(siteIds, months, { contractId: contract });
 
-    var content = setPage('Своды и выгрузки', R.periodLabel(months), [
+    /* Переход внутри раздела с сохранением остальных параметров */
+    function go(over) {
+      UI.Router.go('admin-summary', Object.assign(
+        { from: from, to: to, site: filter, contract: contract, tab: tab }, over || {}));
+    }
+
+    var content = setPage('Своды и выгрузки',
+      R.periodLabel(months) + (contract !== 'all' ? ' · контракт «' + C.Data.contractName(contract) + '»' : ''), [
       h('button.btn.btn-sm', { type: 'button', onclick: function () { window.print(); } }, [UI.icon('print'), 'Печать']),
       h('button.btn.btn-primary.btn-sm', {
-        type: 'button', onclick: function () { exportSummaryFile(siteIds, months); }
+        type: 'button', onclick: function () { exportSummaryFile(siteIds, months, contract); }
       }, [UI.icon('download'), 'Выгрузить в Excel'])
     ]);
 
     content.appendChild(h('div.row.between.wrap.mb-3', [
-      periodPicker(from, to, function (f, t) { UI.Router.go('admin-summary', { from: f, to: t, site: filter, tab: tab }); }),
+      periodPicker(from, to, function (f, t) { go({ from: f, to: t }); }),
       h('div.toolbar', [
-        siteFilter(filter, function (v) { UI.Router.go('admin-summary', { from: from, to: to, site: v, tab: tab }); })
+        siteFilter(filter, function (v) { go({ site: v }); }),
+        contractFilter(contract, function (v) { go({ contract: v }); })
       ])
     ]));
 
@@ -734,18 +755,120 @@
     ]));
 
     content.appendChild(h('div.toolbar.mb-3', h('div.seg', [
-      ['sites', 'По участкам'], ['works', 'По видам работ'], ['months', 'Помесячно'], ['detail', 'Детализация']
+      ['sites', 'По участкам'], ['contracts', 'По контрактам'], ['works', 'По видам работ'],
+      ['months', 'Помесячно'], ['detail', 'Детализация']
     ].map(function (t) {
       return h('button', {
         type: 'button', class: tab === t[0] ? 'active' : '',
-        onclick: function () { UI.Router.go('admin-summary', { from: from, to: to, site: filter, tab: t[0] }); }
+        onclick: function () { go({ tab: t[0] }); }
       }, t[1]);
     }))));
 
     if (tab === 'sites') content.appendChild(tabSites(agg));
+    else if (tab === 'contracts') content.appendChild(tabContracts(agg, go));
     else if (tab === 'works') content.appendChild(tabWorks(agg));
     else if (tab === 'months') content.appendChild(tabMonths(agg));
     else content.appendChild(tabDetail(agg));
+  }
+
+  function tabContracts(agg, go) {
+    if (!agg.contracts.length) {
+      return h('div.card', h('div.card-body', UI.empty('Нет данных по контрактам',
+        'Контракты определяются по заголовкам объектов в файлах планов. Загрузите планы за выбранный период.')));
+    }
+    var sites = agg.siteIds.filter(function (sid) {
+      return agg.contracts.some(function (c) { return c.sites[sid]; });
+    });
+
+    var rows = [];
+    agg.contracts.forEach(function (c) {
+      rows.push(h('tr.row-group', [
+        h('td', [
+          h('div', c.name),
+          h('div.tiny.muted', c.siteList.length + ' ' +
+            C.plural(c.siteList.length, 'участок', 'участка', 'участков') + ' · ' +
+            c.siteList.map(function (x) { return C.Data.siteShort(x.siteId); }).join(', '))
+        ]),
+        h('td.small', 'всего по контракту'),
+        h('td.n', C.fmtNum(c.plan, 'auto')),
+        h('td.n', C.fmtNum(c.fact, 'auto')),
+        h('td.n', UI.devCell(c.deviation)),
+        h('td.n', UI.pctCell(c.done)),
+        h('td', { style: { minWidth: '120px' } }, UI.progress(c.done)),
+        h('td.right', h('button.btn.btn-sm', {
+          type: 'button', onclick: function () { go({ contract: c.contractId, tab: 'works' }); }
+        }, 'Только этот'))
+      ]));
+      if (c.sectionList.length > 1) {
+        c.sectionList.forEach(function (sec) {
+          rows.push(h('tr', [
+            h('td'),
+            h('td.small.muted', sec.name + ' контракт'),
+            h('td.n', C.fmtNum(sec.plan, 'auto')),
+            h('td.n', C.fmtNum(sec.fact, 'auto')),
+            h('td.n', UI.devCell(sec.deviation)),
+            h('td.n', UI.pctCell(sec.done)),
+            h('td'), h('td')
+          ]));
+        });
+      }
+      c.siteList.forEach(function (x) {
+        rows.push(h('tr', [
+          h('td'),
+          h('td.small', C.Data.siteName(x.siteId)),
+          h('td.n', C.fmtNum(x.plan, 'auto')),
+          h('td.n', C.fmtNum(x.fact, 'auto')),
+          h('td.n', UI.devCell(x.fact - x.plan)),
+          h('td.n', UI.pctCell(x.done)),
+          h('td'), h('td')
+        ]));
+      });
+    });
+    rows.push(h('tr.row-total', [
+      h('td', 'ИТОГО'), h('td.small', 'усл. ед.'),
+      h('td.n', C.fmtNum(agg.totals.plan, 0)), h('td.n', C.fmtNum(agg.totals.fact, 0)),
+      h('td.n', UI.devCell(agg.totals.deviation)), h('td.n', UI.pctCell(agg.totals.done)),
+      h('td', UI.progress(agg.totals.done)), h('td')
+    ]));
+
+    var matrix = h('div.card.mt-3', [
+      h('div.card-head', h('div', [h('h2', 'Контракты и участки'),
+      h('div.sub', 'Фактический объём, выполненный каждым участком по каждому контракту')])),
+      h('div.card-body.tight', h('div.table-wrap', h('table.tbl.compact', [
+        h('thead', h('tr', [h('th', 'Контракт')].concat(sites.map(function (sid) {
+          return h('th.n', { title: C.Data.siteName(sid) }, C.Data.siteShort(sid));
+        })).concat([h('th.n', 'Итого факт'), h('th.n', 'Выполнение')]))),
+        h('tbody', agg.contracts.map(function (c) {
+          return h('tr', [h('td.strong', c.name)].concat(sites.map(function (sid) {
+            var v = c.sites[sid];
+            return h('td.n' + (v ? '' : '.muted'), v ? C.fmtNum(v.fact, 0) : '—');
+          })).concat([
+            h('td.n.strong', C.fmtNum(c.fact, 0)),
+            h('td.n', UI.pctCell(c.done))
+          ]));
+        }).concat([
+          h('tr.row-total', [h('td', 'ИТОГО')].concat(sites.map(function (sid) {
+            var sum = agg.contracts.reduce(function (a, c) { return a + (c.sites[sid] ? c.sites[sid].fact : 0); }, 0);
+            return h('td.n', C.fmtNum(sum, 0));
+          })).concat([h('td.n', C.fmtNum(agg.totals.fact, 0)), h('td')]))
+        ]))
+      ])))
+    ]);
+
+    return h('div', [
+      h('div.card', [
+        h('div.card-head', h('div', [h('h2', 'Выполнение по контрактам'),
+        h('div.sub', 'Итог по договору с разбивкой на разделы и участки-исполнители')])),
+        h('div.card-body.tight', h('div.table-wrap', h('table.tbl', [
+          h('thead', h('tr', [h('th', 'Контракт'), h('th', 'Раздел / участок'), h('th.n', 'План'),
+          h('th.n', 'Факт'), h('th.n', 'Отклонение'), h('th.n', 'Выполнение'), h('th', ''), h('th', '')])),
+          h('tbody', rows)
+        ]))),
+        h('div.card-foot.small.muted', 'Один контракт может вести несколько участков, поэтому итог по договору ' +
+          'не совпадает с итогом ни одного из участков.')
+      ]),
+      sites.length > 1 ? matrix : null
+    ]);
   }
 
   function tabSites(agg) {
@@ -873,11 +996,12 @@
     }));
   }
 
-  function exportSummaryFile(siteIds, months) {
+  function exportSummaryFile(siteIds, months, contractId) {
     var m = UI.spinnerOverlay('Формирование файла Excel…');
-    R.exportSummary(siteIds, months).then(function (blob) {
+    var suffix = contractId && contractId !== 'all' ? ' ' + C.Data.contractName(contractId) : '';
+    R.exportSummary(siteIds, months, { contractId: contractId }).then(function (blob) {
       m.close();
-      UI.downloadBlob(blob, UI.safeFileName('Свод МУАД ' + R.periodLabel(months)) + '.xlsx');
+      UI.downloadBlob(blob, UI.safeFileName('Свод МУАД ' + R.periodLabel(months) + suffix) + '.xlsx');
       C.Data.audit('Выгрузка свода в Excel', R.periodLabel(months) + ' · участков: ' + siteIds.length);
       UI.toast('Файл выгружен', 'ok');
     }).catch(function (e) {
@@ -892,27 +1016,36 @@
     var to = params.to || C.todayKey();
     var from = params.from || to;
     var filter = params.site || 'all';
+    var contract = params.contract || 'all';
     var months = C.monthRange(from, to);
     var siteIds = resolveSites(filter);
-    var agg = C.Calc.aggregate(siteIds, months);
+    var agg = C.Calc.aggregate(siteIds, months, { contractId: contract });
     var canFinal = agg.closedAll;
     var kind = params.kind || (canFinal ? 'final' : 'draft');
     if (kind === 'final' && !canFinal) kind = 'draft';
 
-    var content = setPage('Отчёты и презентации', R.periodLabel(months));
+    function go(over) {
+      UI.Router.go('admin-reports', Object.assign(
+        { from: from, to: to, site: filter, contract: contract, kind: kind }, over || {}));
+    }
+
+    var content = setPage('Отчёты и презентации',
+      R.periodLabel(months) + (contract !== 'all' ? ' · контракт «' + C.Data.contractName(contract) + '»' : ''));
 
     content.appendChild(h('div.card.mb-3', [
       h('div.card-head', h('div', [h('h2', 'Параметры отчёта'),
       h('div.sub', 'Отчёт формируется в виде презентации (.pptx) — открывается в Р7-Офис и MS PowerPoint')])),
       h('div.card-body', [
-        h('div.grid.grid-3', [
+        h('div.grid.grid-4', [
           h('div.field', [h('label', 'Период'),
-          periodPicker(from, to, function (f, t) { UI.Router.go('admin-reports', { from: f, to: t, site: filter, kind: kind }); })]),
+          periodPicker(from, to, function (f, t) { go({ from: f, to: t }); })]),
           h('div.field', [h('label', 'Участки'),
-          siteFilter(filter, function (v) { UI.Router.go('admin-reports', { from: from, to: to, site: v, kind: kind }); })]),
+          siteFilter(filter, function (v) { go({ site: v }); })]),
+          h('div.field', [h('label', 'Контракт'),
+          contractFilter(contract, function (v) { go({ contract: v }); })]),
           h('div.field', [h('label', 'Вид отчёта'),
           h('select', {
-            onchange: function (e) { UI.Router.go('admin-reports', { from: from, to: to, site: filter, kind: e.target.value }); }
+            onchange: function (e) { go({ kind: e.target.value }); }
           }, [
             h('option', { value: 'draft', selected: kind === 'draft' }, 'Предварительный'),
             h('option', { value: 'final', selected: kind === 'final', disabled: !canFinal },
@@ -931,13 +1064,13 @@
       ]),
       h('div.card-foot.row', [
         h('div.small.muted', 'В презентацию войдут: титул, ключевые показатели, свод по участкам, динамика, ' +
-          'разрез по видам работ, слайды по каждому участку, зоны внимания и статус закрытия.'),
+          'разрез по видам работ и по контрактам, слайды по каждому участку, зоны внимания и статус закрытия.'),
         h('div.spacer'),
         h('button.btn', {
-          type: 'button', onclick: function () { exportSummaryFile(siteIds, months); }
+          type: 'button', onclick: function () { exportSummaryFile(siteIds, months, contract); }
         }, [UI.icon('download'), 'Приложение Excel']),
         h('button.btn.btn-primary', {
-          type: 'button', onclick: function () { makeReport(siteIds, months, kind); }
+          type: 'button', onclick: function () { makeReport(siteIds, months, kind, contract); }
         }, [UI.icon('slides'), 'Сформировать презентацию'])
       ])
     ]));
@@ -946,11 +1079,14 @@
     renderReportLog(content);
   }
 
-  function makeReport(siteIds, months, kind) {
+  function makeReport(siteIds, months, kind, contractId) {
     var m = UI.spinnerOverlay('Формирование презентации…');
     setTimeout(function () {
       try {
-        var deck = R.buildReport({ siteIds: siteIds, months: months, kind: kind });
+        var deck = R.buildReport({
+          siteIds: siteIds, months: months, kind: kind,
+          contractId: contractId && contractId !== 'all' ? contractId : null
+        });
         m.close();
         var host = UI.clear(document.getElementById('report-preview'));
         host.appendChild(h('div.card', [
@@ -979,12 +1115,14 @@
     R.toPptx(deck).then(function (blob) {
       m.close();
       var name = 'Отчёт МУАД ' + deck.meta.periodLabel +
+        (deck.meta.contractLabel ? ' ' + deck.meta.contractLabel : '') +
         (deck.meta.kind === 'final' ? ' (окончательный)' : ' (предварительный)');
       UI.downloadBlob(blob, UI.safeFileName(name) + '.pptx');
       var db = C.Data.db();
       db.reports.unshift({
         ts: new Date().toISOString(), by: C.Auth.current().title,
-        period: deck.meta.periodLabel, kind: deck.meta.kind,
+        period: deck.meta.periodLabel + (deck.meta.contractLabel ? ' · ' + deck.meta.contractLabel : ''),
+        kind: deck.meta.kind,
         sites: deck.meta.siteIds.length, slides: deck.slides.length,
         plan: deck.meta.agg.totals.plan, fact: deck.meta.agg.totals.fact
       });
@@ -1260,6 +1398,109 @@
     });
   }
 
+  /* ===================== СПРАВОЧНИК КОНТРАКТОВ ===================== */
+
+  function viewContracts() {
+    var content = setPage('Контракты и объекты', 'Справочник договоров, на которые относятся объёмы работ');
+    var list = C.Data.contracts();
+
+    content.appendChild(h('div.mb-3', UI.notice('info',
+      'Контракты определяются автоматически по заголовкам объектов в файлах планов. ' +
+      'Разные написания одного договора сводятся в одну запись; если система что-то разделила ' +
+      'ошибочно — объедините записи вручную, объёмы пересчитаются сразу.')));
+
+    if (!list.length) {
+      content.appendChild(h('div.card', h('div.card-body', UI.empty('Справочник пуст',
+        'Контракты появятся после загрузки первого плана по участкам.'))));
+      return;
+    }
+
+    var months = C.Data.allMonths();
+    var agg = C.Calc.aggregate(allSiteIds(), months);
+
+    content.appendChild(h('div.card', [
+      h('div.card-head', h('div', [
+        h('h2', 'Контракты'),
+        h('div.sub', 'Данные за все загруженные периоды: ' + R.periodLabel(months.slice().sort()))
+      ])),
+      h('div.card-body.tight', h('div.table-wrap', h('table.tbl', [
+        h('thead', h('tr', [h('th', 'Контракт'), h('th', 'Участки-исполнители'), h('th.n', 'План'),
+        h('th.n', 'Факт'), h('th.n', 'Выполнение'), h('th', 'Написания в файлах планов'), h('th', '')])),
+        h('tbody', list.map(function (c) {
+          var a = agg.byContract[c.id];
+          return h('tr', [
+            h('td.strong', c.name),
+            h('td.small', a ? a.siteList.map(function (x) { return C.Data.siteShort(x.siteId); }).join(', ') : '—'),
+            h('td.n', a ? C.fmtNum(a.plan, 0) : '—'),
+            h('td.n', a ? C.fmtNum(a.fact, 0) : '—'),
+            h('td.n', a ? UI.pctCell(a.done) : '—'),
+            h('td.tiny.muted', { style: { maxWidth: '320px' } },
+              (c.aliases || []).filter(function (x, i, arr) { return x && arr.indexOf(x) === i; }).join(' · ') || '—'),
+            h('td.row', isAdmin() ? [
+              h('button.btn.btn-sm', {
+                type: 'button', onclick: function () { renameContract(c.id); }
+              }, 'Переименовать'),
+              list.length > 1 ? h('button.btn.btn-sm', {
+                type: 'button', onclick: function () { mergeContract(c.id); }
+              }, 'Объединить') : null
+            ] : null)
+          ]);
+        }))
+      ])))
+    ]));
+  }
+
+  function renameContract(id) {
+    var c = C.Data.contract(id);
+    if (!c) return;
+    UI.prompt({
+      title: 'Наименование контракта',
+      sub: 'Используется во всех сводах и отчётах',
+      label: 'Наименование', value: c.name, okText: 'Сохранить'
+    }).then(function (name) {
+      if (name === null) return;
+      name = String(name).trim();
+      if (!name) { UI.toast('Наименование не может быть пустым', 'err'); return; }
+      var old = c.name;
+      c.name = name;
+      C.Data.save(true);
+      C.Data.audit('Переименован контракт', old + ' → ' + name);
+      UI.toast('Сохранено', 'ok');
+      viewContracts();
+    });
+  }
+
+  function mergeContract(id) {
+    var from = C.Data.contract(id);
+    var others = C.Data.contracts().filter(function (c) { return c.id !== id; });
+    if (!from || !others.length) return;
+    var sel = h('select', others.map(function (c) { return h('option', { value: c.id }, c.name); }));
+    var m = UI.modal({
+      title: 'Объединение контрактов',
+      sub: '«' + from.name + '» будет присоединён к выбранному контракту',
+      body: h('div', [
+        h('div.field', [h('label', 'Присоединить к контракту'), sel]),
+        UI.notice('warn', 'Все объёмы, отнесённые к «' + from.name + '», перейдут к выбранному контракту. ' +
+          'Написания из файлов планов сохранятся, поэтому повторная загрузка планов не разделит записи заново.')
+      ]),
+      foot: [
+        h('button.btn', { type: 'button', onclick: function () { m.close(); } }, 'Отмена'),
+        h('button.btn.btn-primary', {
+          type: 'button',
+          onclick: function () {
+            var to = C.Data.contract(sel.value);
+            if (!to) return;
+            C.Data.mergeContracts(from.id, to.id);
+            C.Data.audit('Объединены контракты', from.name + ' → ' + to.name);
+            m.close();
+            UI.toast('Контракты объединены', 'ok');
+            viewContracts();
+          }
+        }, 'Объединить')
+      ]
+    });
+  }
+
   /* ===================== ДАННЫЕ И КОПИИ ===================== */
 
   function viewData() {
@@ -1515,6 +1756,7 @@
       .on('admin-reports', viewReports)
       .on('admin-sites', viewSites)
       .on('admin-works', viewWorks)
+      .on('admin-contracts', viewContracts)
       .on('admin-data', viewData)
       .on('admin-audit', viewAudit);
   }

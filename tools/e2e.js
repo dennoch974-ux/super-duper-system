@@ -294,12 +294,54 @@ function fail(msg) { errors.push(msg); console.log('  ✗', msg); }
   await page.click('button:has-text("Сформировать презентацию")');
   await page.waitForSelector('.slide-frame', { timeout: 30000 });
   const slides = await page.locator('.slide-frame').count();
-  slides >= 8 ? ok('презентация: ' + slides + ' слайдов') : fail('слайдов: ' + slides);
+  slides >= 10 ? ok('презентация: ' + slides + ' слайдов') : fail('слайдов: ' + slides);
+  const hasContractSlides = await page.evaluate(() =>
+    Array.from(document.querySelectorAll('.slide-frame')).some(f => /по контрактам/i.test(f.textContent)) &&
+    Array.from(document.querySelectorAll('.slide-frame')).some(f => /Контракты и участки/i.test(f.textContent)));
+  hasContractSlides ? ok('слайды по контрактам присутствуют') : fail('слайдов по контрактам нет');
   await page.waitForTimeout(600);
   await shot(page, 'report-preview');
   await page.click('button:has-text("Скачать презентацию")');
   await page.waitForTimeout(4000);
   ok('презентация скачана');
+
+  console.log('\n=== 11a. Своды по контрактам ===');
+  await page.evaluate(() => { location.hash = '#/admin-summary?from=2026-01&to=2026-01&tab=contracts'; });
+  await page.waitForTimeout(800);
+  const ctr = await page.evaluate(() => {
+    const agg = CORE.Calc.aggregate(CORE.Data.sites().map(s => s.id), ['2026-01']);
+    return agg.contracts.map(c => ({
+      name: c.name, sites: c.siteList.length,
+      plan: Math.round(c.plan), sections: c.sectionList.length
+    }));
+  });
+  ctr.length >= 5 ? ok('контрактов в своде: ' + ctr.length + ' — ' + ctr.map(c => c.name + ' (' + c.sites + ' уч.)').join('; '))
+    : fail('контрактов распознано: ' + ctr.length);
+  const multi = ctr.filter(c => c.sites > 1).length;
+  multi >= 2 ? ok('контрактов на нескольких участках: ' + multi) : fail('межучастковых контрактов: ' + multi);
+  await shot(page, 'admin-summary-contracts');
+
+  // фильтр по контракту
+  const firstId = await page.evaluate(() => {
+    const agg = CORE.Calc.aggregate(CORE.Data.sites().map(s => s.id), ['2026-01']);
+    return agg.contracts[0].contractId;
+  });
+  await page.evaluate(id => { location.hash = '#/admin-summary?from=2026-01&to=2026-01&tab=sites&contract=' + id; }, firstId);
+  await page.waitForTimeout(700);
+  const filteredOk = await page.evaluate(id => {
+    const ids = CORE.Data.sites().map(s => s.id);
+    const all = CORE.Calc.aggregate(ids, ['2026-01']);
+    const one = CORE.Calc.aggregate(ids, ['2026-01'], { contractId: id });
+    return one.totals.plan > 0 && one.totals.plan < all.totals.plan;
+  }, firstId);
+  filteredOk ? ok('фильтр по контракту сужает свод') : fail('фильтр по контракту не работает');
+  await shot(page, 'admin-summary-contract-filter');
+
+  await page.evaluate(() => { location.hash = '#/admin-contracts'; });
+  await page.waitForTimeout(700);
+  const dirRows = await page.locator('table.tbl tbody tr').count();
+  dirRows >= 5 ? ok('справочник контрактов: ' + dirRows + ' записей') : fail('справочник пуст');
+  await shot(page, 'admin-contracts');
 
   console.log('\n=== 12. Участки, справочник, журнал ===');
   for (const [route, name] of [['admin-sites', 'admin-sites'], ['admin-works', 'admin-works'],

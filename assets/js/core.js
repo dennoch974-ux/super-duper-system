@@ -297,6 +297,7 @@
       works: WORKS_SEED.map(function (w) {
         return { id: slug(w.name), name: w.name, unit: normUnit(w.unit), group: w.group };
       }),
+      contracts: [],  // заполняется при загрузке планов: {id, name, aliases, order}
       plans: {},      // 'siteId|YYYY-MM' -> plan
       facts: {},      // 'siteId|YYYY-MM' -> fact
       closures: {},   // 'siteId|YYYY-MM' -> closure
@@ -343,6 +344,7 @@
     db.reports = db.reports || [];
     db.audit = db.audit || [];
     db.works = db.works && db.works.length ? db.works : base.works;
+    db.contracts = db.contracts || [];
     if (!db.sites || !db.sites.length) db.sites = base.sites;
     return db;
   }
@@ -498,6 +500,31 @@
     },
 
     works: function () { return load().works.slice(); },
+
+    contracts: function () {
+      return load().contracts.slice().sort(function (a, b) {
+        return (a.order || 99) - (b.order || 99) || a.name.localeCompare(b.name, 'ru');
+      });
+    },
+    contract: function (id) {
+      return load().contracts.filter(function (c) { return c.id === id; })[0] || null;
+    },
+    contractName: function (id) {
+      var c = Data.contract(id);
+      return c ? c.name : '—';
+    },
+    resolveContract: function (raw, siteId) { return resolveContract(raw, siteId); },
+    contractSection: function (raw, siteId) { return contractSection(raw, siteId); },
+    /* Объединение двух контрактов: псевдонимы переносятся, исходный удаляется */
+    mergeContracts: function (fromId, toId) {
+      var db = load();
+      var from = Data.contract(fromId), to = Data.contract(toId);
+      if (!from || !to || fromId === toId) return false;
+      to.aliases = (to.aliases || []).concat(from.aliases || []);
+      db.contracts = db.contracts.filter(function (c) { return c.id !== fromId; });
+      save(true);
+      return true;
+    },
     findWork: function (name) {
       var n = normKey(name);
       return load().works.filter(function (w) { return normKey(w.name) === n; })[0] || null;
@@ -568,6 +595,88 @@
     allMonths: function () { return Data.monthsWithData(null); }
   };
 
+  /* ===================== КОНТРАКТЫ ===================== */
+
+  /* Основной контракт участка выводится из перечня обслуживаемых дорог */
+  function defaultContractName(site) {
+    if (!site) return 'Основной контракт';
+    var m = String(site.roads || '').match(/[«"]([^»"]+)[»"]/);
+    if (m) return m[1].trim();
+    return site.code ? site.code : 'Основной контракт';
+  }
+
+  /* «Основной контракт "Мухтуя"» -> {name: 'Мухтуя', section: 'Основной'}
+     «Автозимник "Вилюй"»         -> {name: 'Автозимник Вилюй', section: 'Основной'}
+     «Основной контракт»          -> название берётся из дорог участка */
+  function parseContract(raw, site) {
+    var t = String(raw == null ? '' : raw).trim();
+    if (!t) return { name: defaultContractName(site), section: 'Основной' };
+
+    var section = 'Основной';
+    var low = norm(t);
+    if (/^доп/.test(low)) section = 'Дополнительный';
+
+    var s = t
+      .replace(/^\s*(основной|дополнительный|осн\.?|доп\.?)\s*/i, '')
+      .replace(/^\s*контракт[а-яё]*\s*/i, '')
+      .replace(/^\s*содержание\s*/i, '')
+      .trim();
+
+    var winter = /(^|\s)(а\/?\s*зимник|автозимник)/i.test(s);
+    s = s.replace(/^\s*(а\/?\s*зимник[а-яё]*|автозимник[а-яё]*)\s*/i, '').trim();
+
+    var quoted = s.match(/[«"]([^»"]+)[»"]/);
+    var name;
+    if (quoted) {
+      name = quoted[1].trim();
+    } else {
+      name = s
+        .replace(/^\s*(фад|а\/д|автомобильная дорога)\s*/i, '')
+        .replace(/\s*(на\s*уч\.?\s*)?км\s*\d+\s*[-–—]\s*(км\s*)?\d+\s*$/i, '')
+        .trim();
+    }
+    name = name.replace(/[«»"]/g, '').replace(/\s{2,}/g, ' ').replace(/[,;:.\-–—]+$/, '').trim();
+    if (!name) name = defaultContractName(site);
+    if (winter && !/зимник/i.test(name)) name = 'Автозимник ' + name;
+    return { name: name, section: section };
+  }
+
+  /* Сопоставление строки плана с записью справочника контрактов.
+     Написания из разных файлов накапливаются в псевдонимах, поэтому
+     администратор видит, что именно было объединено. */
+  function resolveContract(raw, siteId) {
+    var db = load();
+    var site = siteId ? Data.site(siteId) : null;
+    var key = normKey(raw) || ('дефолт' + (siteId || ''));
+
+    for (var i = 0; i < db.contracts.length; i++) {
+      var c = db.contracts[i];
+      if ((c.aliases || []).some(function (a) { return normKey(a) === key; })) return c;
+    }
+
+    var parsed = parseContract(raw, site);
+    var byName = db.contracts.filter(function (c) { return normKey(c.name) === normKey(parsed.name); })[0];
+    if (byName) {
+      byName.aliases = (byName.aliases || []).concat([String(raw == null ? '' : raw)]);
+      save();
+      return byName;
+    }
+    var created = {
+      id: slug(parsed.name) || uid('ctr'),
+      name: parsed.name,
+      aliases: [String(raw == null ? '' : raw)],
+      order: db.contracts.length + 1
+    };
+    db.contracts.push(created);
+    save();
+    return created;
+  }
+
+  function contractSection(raw, siteId) {
+    var site = siteId ? Data.site(siteId) : null;
+    return parseContract(raw, site).section;
+  }
+
   /* ===================== РАСЧЁТЫ ===================== */
 
   /* Ключ строки: объект|работа|единица — устойчив к повторному импорту плана */
@@ -588,7 +697,7 @@
       var planTotal = sumDays(pr.days, dim, pr.total);
       var factTotal = sumDays(factDays, dim, null);
       seen[pr.id] = 1;
-      rows.push(makeRow(pr.id, pr.object, pr.work, pr.unit, pr.days || {}, factDays, planTotal, factTotal, dim, false));
+      rows.push(makeRow(pr.id, pr.object, pr.work, pr.unit, pr.days || {}, factDays, planTotal, factTotal, dim, false, siteId));
     });
 
     /* Внеплановые работы, внесённые участком */
@@ -598,7 +707,7 @@
         var meta = (fact.extra || []).filter(function (e) { return e.id === id; })[0];
         if (!meta) return;
         var factDays = fact.rows[id] || {};
-        rows.push(makeRow(id, meta.object, meta.work, meta.unit, {}, factDays, 0, sumDays(factDays, dim, null), dim, true));
+        rows.push(makeRow(id, meta.object, meta.work, meta.unit, {}, factDays, 0, sumDays(factDays, dim, null), dim, true, siteId));
       });
     }
 
@@ -618,10 +727,12 @@
     };
   }
 
-  function makeRow(id, object, work, unit, planDays, factDays, planTotal, factTotal, dim, unplanned) {
+  function makeRow(id, object, work, unit, planDays, factDays, planTotal, factTotal, dim, unplanned, siteId) {
     var dev = factTotal - planTotal;
+    var ctr = resolveContract(object, siteId);
     return {
       id: id, object: object || '', work: work, unit: unit,
+      contractId: ctr.id, contractName: ctr.name, section: contractSection(object, siteId),
       planDays: planDays, factDays: factDays,
       planTotal: round(planTotal), factTotal: round(factTotal),
       deviation: round(dev),
@@ -680,8 +791,10 @@
   }
 
   /* Агрегация по нескольким участкам и месяцам */
-  function aggregate(siteIds, months) {
-    var bySite = {}, byWork = {}, byMonth = {}, totals = { plan: 0, fact: 0 };
+  /* opts.contractId — ограничить свод одним контрактом */
+  function aggregate(siteIds, months, opts) {
+    var filterContract = opts && opts.contractId && opts.contractId !== 'all' ? opts.contractId : null;
+    var bySite = {}, byWork = {}, byMonth = {}, byContract = {}, totals = { plan: 0, fact: 0 };
     var rowsAll = [];
 
     siteIds.forEach(function (sid) {
@@ -692,16 +805,45 @@
     siteIds.forEach(function (sid) {
       months.forEach(function (mk) {
         var sm = siteMonth(sid, mk);
-        bySite[sid].months[mk] = { plan: sm.totals.plan, fact: sm.totals.fact, closed: sm.closure.status === 'closed', hasPlan: sm.hasPlan };
+        var mt = { plan: 0, fact: 0 };
+        sm.rows.forEach(function (r) {
+          if (filterContract && r.contractId !== filterContract) return;
+          mt.plan += r.planTotal; mt.fact += r.factTotal;
+        });
+        bySite[sid].months[mk] = { plan: mt.plan, fact: mt.fact, closed: sm.closure.status === 'closed', hasPlan: sm.hasPlan };
         if (sm.closure.status === 'closed') bySite[sid].closedMonths++;
-        bySite[sid].plan += sm.totals.plan;
-        bySite[sid].fact += sm.totals.fact;
-        byMonth[mk].plan += sm.totals.plan;
-        byMonth[mk].fact += sm.totals.fact;
-        totals.plan += sm.totals.plan;
-        totals.fact += sm.totals.fact;
+        bySite[sid].plan += mt.plan;
+        bySite[sid].fact += mt.fact;
+        byMonth[mk].plan += mt.plan;
+        byMonth[mk].fact += mt.fact;
+        totals.plan += mt.plan;
+        totals.fact += mt.fact;
 
         sm.rows.forEach(function (r) {
+          if (filterContract && r.contractId !== filterContract) return;
+
+          /* Свод по контрактам: итог по контракту с разбивкой
+             на разделы (основной / дополнительный) и по участкам */
+          var ck = r.contractId;
+          if (!byContract[ck]) {
+            byContract[ck] = {
+              contractId: ck, name: r.contractName, plan: 0, fact: 0,
+              sections: {}, sites: {}, works: {}
+            };
+          }
+          var bc = byContract[ck];
+          bc.plan += r.planTotal; bc.fact += r.factTotal;
+          if (!bc.sections[r.section]) bc.sections[r.section] = { name: r.section, plan: 0, fact: 0 };
+          bc.sections[r.section].plan += r.planTotal;
+          bc.sections[r.section].fact += r.factTotal;
+          if (!bc.sites[sid]) bc.sites[sid] = { plan: 0, fact: 0 };
+          bc.sites[sid].plan += r.planTotal;
+          bc.sites[sid].fact += r.factTotal;
+          var cwk = slug(r.work) + '~' + normKey(r.unit);
+          if (!bc.works[cwk]) bc.works[cwk] = { work: r.work, unit: r.unit, plan: 0, fact: 0 };
+          bc.works[cwk].plan += r.planTotal;
+          bc.works[cwk].fact += r.factTotal;
+
           var wk = slug(r.work) + '~' + normKey(r.unit);
           if (!byWork[wk]) byWork[wk] = { work: r.work, unit: r.unit, plan: 0, fact: 0, sites: {} };
           byWork[wk].plan += r.planTotal;
@@ -751,10 +893,40 @@
       return months.every(function (mk) { return Data.closure(sid, mk).status === 'closed'; });
     });
 
+    var contractsList = Object.keys(byContract).map(function (k) {
+      var c = byContract[k];
+      c.plan = round(c.plan); c.fact = round(c.fact);
+      c.deviation = round(c.fact - c.plan);
+      c.done = c.plan > 0 ? c.fact / c.plan : null;
+      c.sectionList = Object.keys(c.sections).map(function (sk) {
+        var x = c.sections[sk];
+        x.plan = round(x.plan); x.fact = round(x.fact);
+        x.deviation = round(x.fact - x.plan);
+        x.done = x.plan > 0 ? x.fact / x.plan : null;
+        return x;
+      }).sort(function (a, b) { return a.name === 'Основной' ? -1 : b.name === 'Основной' ? 1 : 0; });
+      c.siteList = Object.keys(c.sites).map(function (sk) {
+        var x = c.sites[sk];
+        return {
+          siteId: sk, plan: round(x.plan), fact: round(x.fact),
+          done: x.plan > 0 ? x.fact / x.plan : null
+        };
+      }).sort(function (a, b) { return b.plan - a.plan; });
+      c.workList = Object.keys(c.works).map(function (wk) {
+        var x = c.works[wk];
+        x.plan = round(x.plan); x.fact = round(x.fact);
+        x.deviation = round(x.fact - x.plan);
+        x.done = x.plan > 0 ? x.fact / x.plan : null;
+        return x;
+      }).sort(function (a, b) { return b.plan - a.plan; });
+      return c;
+    }).sort(function (a, b) { return b.plan - a.plan; });
+
     return {
-      siteIds: siteIds, months: months,
+      siteIds: siteIds, months: months, contractId: filterContract,
       bySite: bySite, sites: siteIds.map(function (s) { return bySite[s]; }),
       works: worksList, byMonth: monthsList,
+      contracts: contractsList, byContract: byContract,
       totals: { plan: round(totals.plan), fact: round(totals.fact), deviation: round(totals.fact - totals.plan), done: totals.plan > 0 ? totals.fact / totals.plan : null },
       closedAll: closedAll,
       rowsAll: rowsAll
@@ -800,6 +972,7 @@
     normUnit: normUnit, prettyUnit: prettyUnit,
     sha256: SHA, hashPassword: hashPassword,
     Data: Data, Auth: Auth, Calc: Calc,
+    parseContract: parseContract, defaultContractName: defaultContractName,
     SITES_SEED: SITES_SEED, WORKS_SEED: WORKS_SEED
   };
 

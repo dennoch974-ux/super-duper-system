@@ -195,7 +195,8 @@
     var db = C.Data.db();
     var months = opts.months.slice().sort();
     var siteIds = opts.siteIds.slice();
-    var agg = C.Calc.aggregate(siteIds, months);
+    var contractId = opts.contractId && opts.contractId !== 'all' ? opts.contractId : null;
+    var agg = C.Calc.aggregate(siteIds, months, { contractId: contractId });
     var kind = opts.kind || (agg.closedAll ? 'final' : 'draft');
 
     var meta = {
@@ -209,6 +210,8 @@
       generatedAt: new Date(),
       author: db.settings.reportAuthor,
       single: siteIds.length === 1,
+      contractId: contractId,
+      contractLabel: contractId ? C.Data.contractName(contractId) : null,
       agg: agg
     };
     var deck = new Deck(meta);
@@ -219,6 +222,10 @@
     if (months.length > 1) slideMonths(deck, agg);
     else slideDaily(deck, agg);
     slideWorks(deck, agg, opts.maxWorkRows || 12);
+    if (agg.contracts.length) {
+      slideContracts(deck, agg);
+      if (agg.contracts.length > 1 && siteIds.length > 1) slideContractMatrix(deck, agg);
+    }
     if (opts.includeSiteSlides !== false) {
       siteIds.forEach(function (sid) { slideSiteDetail(deck, agg, sid); });
     }
@@ -256,6 +263,7 @@
 
     var scope = m.single ? C.Data.siteName(m.siteIds[0])
       : 'По ' + m.siteIds.length + ' ' + C.plural(m.siteIds.length, 'участку', 'участкам', 'участкам');
+    if (m.contractLabel) scope += ' · контракт «' + m.contractLabel + '»';
     s.el.push(text({ x: M, y: 512, w: 760, h: 24, text: scope, size: 14, color: '9FB6D6' }));
 
     s.el.push(rect({ x: M, y: H - 118, w: 420, h: 1, fill: 'FFFFFF', alpha: 0.18 }));
@@ -481,6 +489,126 @@
         text: 'Показаны ' + maxRows + ' видов работ с наибольшим плановым объёмом из ' + agg.works.length + '. Полный перечень — в приложении Excel.'
       }));
     }
+  }
+
+  function slideContracts(deck, agg) {
+    var s = deck.add();
+    pageFrame(deck, s, 'Выполнение по контрактам',
+      'Разрез по договорам: объёмы суммируются по всем участкам, задействованным на объекте');
+
+    var list = agg.contracts.slice(0, 8);
+    var rows = [['Контракт', 'Раздел', 'Участков', 'План', 'Факт', 'Отклонение', 'Выполнение']];
+    list.forEach(function (c) {
+      rows.push([
+        { text: c.name, align: 'left', bold: true, fill: 'EEF2F7' },
+        { text: 'всего по контракту', align: 'left', fill: 'EEF2F7', color: P.text2 },
+        { text: String(c.siteList.length), align: 'center', fill: 'EEF2F7' },
+        { text: C.fmtNum(c.plan, 'auto'), align: 'right', bold: true, fill: 'EEF2F7' },
+        { text: C.fmtNum(c.fact, 'auto'), align: 'right', bold: true, fill: 'EEF2F7' },
+        { text: C.fmtSigned(c.deviation, 'auto'), align: 'right', fill: 'EEF2F7', color: c.deviation >= 0 ? P.green : P.red },
+        { text: C.fmtPct(c.done), align: 'right', bold: true, fill: 'EEF2F7', color: toneOf(c.done) }
+      ]);
+      if (c.sectionList.length > 1) {
+        c.sectionList.forEach(function (sec) {
+          rows.push([
+            { text: '', align: 'left' },
+            { text: sec.name + ' контракт', align: 'left', color: P.text2 },
+            { text: '', align: 'center' },
+            { text: C.fmtNum(sec.plan, 'auto'), align: 'right' },
+            { text: C.fmtNum(sec.fact, 'auto'), align: 'right' },
+            { text: C.fmtSigned(sec.deviation, 'auto'), align: 'right', color: sec.deviation >= 0 ? P.green : P.red },
+            { text: C.fmtPct(sec.done), align: 'right', color: toneOf(sec.done) }
+          ]);
+        });
+      }
+    });
+
+    var rowH = Math.max(18, Math.min(26, 300 / Math.max(rows.length, 1)));
+    s.el.push(table({
+      x: M, y: 122, w: W - M * 2, rowH: rowH, headerH: 30, zebra: false,
+      colWidths: [3, 2.2, 0.9, 1.2, 1.2, 1.2, 1.2], rows: rows,
+      fontSize: rowH < 22 ? 9.5 : 10.5
+    }));
+
+    var barsY = 122 + 30 + rows.length * rowH + 46;
+    if (barsY < H - 150) {
+      s.el.push(text({
+        x: M, y: barsY - 30, w: 600, h: 22, text: 'Выполнение плана по контрактам',
+        size: 13, bold: true, color: P.navy2
+      }));
+      s.el = s.el.concat(bars({
+        x: M, y: barsY, w: W - M * 2, labelW: 260, rowH: Math.min(26, (H - 70 - barsY) / Math.max(list.length, 1) - 8),
+        items: list.map(function (c) {
+          return {
+            label: c.name, value: (c.done || 0) * 100, text: C.fmtPct(c.done),
+            color: toneOf(c.done), valueColor: toneOf(c.done)
+          };
+        }),
+        max: 110, target: 100
+      }));
+    }
+    if (agg.contracts.length > list.length) {
+      s.el.push(text({
+        x: M, y: H - 60, w: W - M * 2, h: 16, size: 9, color: P.muted,
+        text: 'Показаны 8 контрактов с наибольшим плановым объёмом из ' + agg.contracts.length +
+          '. Полный перечень — в приложении Excel.'
+      }));
+    }
+  }
+
+  function slideContractMatrix(deck, agg) {
+    var s = deck.add();
+    pageFrame(deck, s, 'Контракты и участки',
+      'Фактический объём, выполненный каждым участком по каждому контракту');
+
+    var list = agg.contracts.slice(0, 9);
+    var sites = agg.siteIds.filter(function (sid) {
+      return list.some(function (c) { return c.sites[sid]; });
+    });
+
+    var head = [{ text: 'Контракт', align: 'left' }].concat(sites.map(function (sid) {
+      return { text: C.Data.siteShort(sid), align: 'center' };
+    })).concat([{ text: 'Итого факт', align: 'center' }, { text: '%', align: 'center' }]);
+    var rows = [head];
+
+    list.forEach(function (c) {
+      var line = [{ text: c.name, align: 'left' }];
+      sites.forEach(function (sid) {
+        var v = c.sites[sid];
+        line.push({
+          text: v ? C.fmtNum(v.fact, 0) : '—', align: 'right',
+          color: v ? P.text : P.muted
+        });
+      });
+      line.push({ text: C.fmtNum(c.fact, 0), align: 'right', bold: true });
+      line.push({ text: C.fmtPct(c.done), align: 'right', bold: true, color: toneOf(c.done) });
+      rows.push(line);
+    });
+
+    var totalLine = [{ text: 'ИТОГО', align: 'left', bold: true, fill: 'EEF2F7' }];
+    sites.forEach(function (sid) {
+      var sum = list.reduce(function (a, c) { return a + (c.sites[sid] ? c.sites[sid].fact : 0); }, 0);
+      totalLine.push({ text: C.fmtNum(sum, 0), align: 'right', bold: true, fill: 'EEF2F7' });
+    });
+    totalLine.push({
+      text: C.fmtNum(list.reduce(function (a, c) { return a + c.fact; }, 0), 0),
+      align: 'right', bold: true, fill: 'EEF2F7'
+    });
+    totalLine.push({ text: '', fill: 'EEF2F7' });
+    rows.push(totalLine);
+
+    var widths = [2.6].concat(sites.map(function () { return 1; })).concat([1.2, 0.8]);
+    var rowH = Math.max(20, Math.min(30, 380 / Math.max(rows.length, 1)));
+    s.el.push(table({
+      x: M, y: 126, w: W - M * 2, rowH: rowH, headerH: 34, zebra: false,
+      colWidths: widths, rows: rows, fontSize: sites.length > 6 ? 9.5 : 10.5
+    }));
+
+    s.el.push(text({
+      x: M, y: 126 + 34 + rows.length * rowH + 22, w: W - M * 2, h: 40, size: 10.5, color: P.text2,
+      text: 'Контракт ведётся несколькими участками, поэтому итог по договору не совпадает с итогом ' +
+        'ни одного из участков. Прочерк означает, что участок на этом объекте работы не выполняет.'
+    }));
   }
 
   function slideSiteDetail(deck, agg, siteId) {
@@ -887,12 +1015,16 @@
   }
 
   /* Общий свод за период */
-  function exportSummary(siteIds, months) {
-    var agg = C.Calc.aggregate(siteIds, months);
+  function exportSummary(siteIds, months, opts) {
+    var contractId = opts && opts.contractId && opts.contractId !== 'all' ? opts.contractId : null;
+    var agg = C.Calc.aggregate(siteIds, months, { contractId: contractId });
     var sheets = [];
 
     var rows = [];
-    rows.push([{ v: 'Свод выполнения объёмов работ · ' + periodLabel(months), s: 'title' }]);
+    rows.push([{
+      v: 'Свод выполнения объёмов работ · ' + periodLabel(months) +
+        (contractId ? ' · контракт «' + C.Data.contractName(contractId) + '»' : ''), s: 'title'
+    }]);
     rows.push([{ v: C.Data.db().settings.org + ' · ' + C.Data.db().settings.dept, s: 'section' }]);
     rows.push([{ v: 'Сформирован: ' + C.fmtDateTimeRu(new Date()), s: 'note' }]);
     rows.push([]);
@@ -945,6 +1077,51 @@
     var wcols = [{ w: 56 }, { w: 12 }, { w: 15 }, { w: 15 }, { w: 14 }, { w: 13 }];
     siteIds.forEach(function () { wcols.push({ w: 14 }); });
     sheets.push({ name: 'По видам работ', rows: wrows, cols: wcols, freeze: { row: 3, col: 2 } });
+
+    /* По контрактам */
+    if (agg.contracts.length) {
+      var crows = [];
+      crows.push([{ v: 'Выполнение по контрактам · ' + periodLabel(months), s: 'title' }]);
+      crows.push([{ v: 'Объёмы по договору суммируются по всем участкам, задействованным на объекте.', s: 'note' }]);
+      crows.push([]);
+      var chead = [{ v: 'Контракт', s: 'hleft' }, { v: 'Раздел / вид работ', s: 'hleft' }, { v: 'Ед. изм.', s: 'h' },
+      { v: 'План', s: 'h' }, { v: 'Факт', s: 'h' }, { v: 'Отклонение', s: 'h' }, { v: 'Выполнение', s: 'h' }];
+      siteIds.forEach(function (sid) { chead.push({ v: C.Data.siteShort(sid) + ', факт', s: 'h' }); });
+      crows.push(chead);
+
+      agg.contracts.forEach(function (c) {
+        var line = [
+          { v: c.name, s: 'group' }, { v: 'ИТОГО ПО КОНТРАКТУ', s: 'group' }, { v: 'усл. ед.', s: 'group' },
+          { v: c.plan, s: 'total' }, { v: c.fact, s: 'total' }, { v: c.deviation, s: 'total' },
+          { v: c.done, s: 'pctb' }
+        ];
+        siteIds.forEach(function (sid) {
+          line.push({ v: c.sites[sid] ? C.round(c.sites[sid].fact, 2) : '', s: 'total' });
+        });
+        crows.push(line);
+
+        if (c.sectionList.length > 1) {
+          c.sectionList.forEach(function (sec) {
+            crows.push([
+              { v: '', s: 'txt' }, { v: sec.name + ' контракт', s: 'txt' }, { v: 'усл. ед.', s: 'txtc' },
+              { v: sec.plan, s: 'num' }, { v: sec.fact, s: 'num' },
+              { v: sec.deviation, s: sec.deviation >= 0 ? 'good' : 'bad' }, { v: sec.done, s: 'pct' }
+            ]);
+          });
+        }
+        c.workList.forEach(function (w2) {
+          crows.push([
+            { v: '', s: 'txt' }, { v: w2.work, s: 'txt' }, { v: C.prettyUnit(w2.unit), s: 'txtc' },
+            { v: w2.plan, s: 'num' }, { v: w2.fact, s: 'num' },
+            { v: w2.deviation, s: w2.deviation >= 0 ? 'good' : 'bad' }, { v: w2.done, s: 'pct' }
+          ]);
+        });
+      });
+
+      var ccols = [{ w: 30 }, { w: 52 }, { w: 12 }, { w: 15 }, { w: 15 }, { w: 14 }, { w: 13 }];
+      siteIds.forEach(function () { ccols.push({ w: 14 }); });
+      sheets.push({ name: 'По контрактам', rows: crows, cols: ccols, freeze: { row: 4, col: 2 } });
+    }
 
     /* Помесячно */
     if (months.length > 1) {

@@ -104,6 +104,7 @@
       { group: 'Администрирование' },
       { id: 'admin-sites', title: 'Участки и доступы', icon: 'users' },
       { id: 'admin-works', title: 'Справочник работ', icon: 'file' },
+      { id: 'admin-contracts', title: 'Контракты и объекты', icon: 'shield' },
       { id: 'admin-data', title: 'Данные и копии', icon: 'archive' },
       { id: 'admin-audit', title: 'Журнал действий', icon: 'log' }
     ],
