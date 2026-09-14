@@ -135,9 +135,25 @@ function fail(msg) { errors.push(msg); console.log('  ✗', msg); }
   ok('форма ввода за день: строк ' + n);
   for (let i = 0; i < Math.min(n, 6); i++) await inputs.nth(i).fill(String(40 + i * 7));
   await shot(page, 'site-entry-day');
+
+  // защита от потери несохранённых данных при переходе в другой раздел
+  await page.click('[data-route="site-summary"]');
+  await page.waitForSelector('.modal', { timeout: 5000 });
+  ok('при уходе с несохранёнными данными выдано предупреждение');
+  await shot(page, 'site-entry-guard');
+  await page.locator('.modal-foot button').first().click();   // «Остаться и сохранить»
+  await page.waitForTimeout(400);
+  const kept = await page.locator('td.day-cell input').first().inputValue();
+  kept === '40' ? ok('введённые значения сохранены на экране') : fail('значения потеряны: "' + kept + '"');
+
   await page.click('button:has-text("Сохранить")');
   await page.waitForTimeout(700);
   ok('данные за день сохранены');
+  const saved = await page.evaluate(() => {
+    const f = CORE.Data.factRaw('ldu', '2026-01');
+    return Object.values(f.rows).filter(r => r['5'] != null).length;
+  });
+  saved >= 5 ? ok('факт за 5 число записан по ' + saved + ' позициям') : fail('записано позиций: ' + saved);
 
   // неделя
   await page.evaluate(() => { location.hash = '#/site-entry?month=2026-01&mode=week&day=14'; });

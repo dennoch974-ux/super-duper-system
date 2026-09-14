@@ -336,6 +336,7 @@
         C.Data.audit('Внесены объёмы', C.monthTitle(month) + ', ' +
           (mode === 'day' ? 'день ' + day : 'дни ' + days[0] + '–' + days[days.length - 1]) +
           ', ячеек: ' + n);
+        dirty = false;
         UI.toast('Данные сохранены', 'ok');
         UI.Router.go('site-entry', { month: month, mode: mode, day: day });
       }
@@ -345,6 +346,7 @@
       dirty = true;
       saveBtn.disabled = false;
     }
+    UI.Router.guard = function () { return dirty; };
 
     var dayPicker = mode === 'day'
       ? h('div.toolbar', [
@@ -392,7 +394,6 @@
       ])
     ]));
 
-    window.onbeforeunload = function () { return dirty ? 'Есть несохранённые изменения' : null; };
   }
 
   function dayOptions(month, dim, day, sm) {
@@ -520,6 +521,8 @@
       onclick: function () {
         var n = applyChanges(month, changes);
         C.Data.audit('Редактирование месячной таблицы', C.monthTitle(month) + ', изменено ячеек: ' + n);
+        changes = {};
+        UI.Router.guard = null;
         UI.toast('Изменения сохранены', 'ok');
         UI.Router.go('site-month', { month: month });
       }
@@ -533,8 +536,16 @@
             title: 'Отменить изменения?',
             text: 'Внесённые, но не сохранённые значения будут потеряны.',
             okText: 'Отменить изменения', danger: true
-          }).then(function (ok) { if (ok) UI.Router.go('site-month', { month: month }); });
-        } else UI.Router.go('site-month', { month: month });
+          }).then(function (ok) {
+            if (!ok) return;
+            changes = {};
+            UI.Router.guard = null;
+            UI.Router.go('site-month', { month: month });
+          });
+        } else {
+          UI.Router.guard = null;
+          UI.Router.go('site-month', { month: month });
+        }
       }
     }, 'Отмена');
 
@@ -547,6 +558,9 @@
     if (lock) content.appendChild(h('div.mb-3', lock));
     if (!sm.rows.length) { content.appendChild(noPlanNotice(month)); return; }
 
+    if (editing && !locked) {
+      UI.Router.guard = function () { return Object.keys(changes).length > 0; };
+    }
     if (editing) {
       content.appendChild(h('div.mb-3', UI.notice('info',
         'Режим редактирования: измените необходимые ячейки и нажмите «Сохранить изменения». ' +

@@ -338,8 +338,45 @@
       }
       return { name: name || '', params: params };
     },
+    /* Защита от потери несохранённых данных.
+       Экран с формой ввода выставляет Router.guard — функцию, которая
+       возвращает true, пока есть несохранённые изменения. */
+    guard: null,
+    _prev: null,
+    _revert: false,
+    _leave: false,
+
+    askLeave: function (intended) {
+      confirmBox({
+        title: 'Есть несохранённые данные',
+        text: 'Внесённые объёмы ещё не сохранены. Если перейти в другой раздел, они будут потеряны.',
+        okText: 'Уйти без сохранения', cancelText: 'Остаться и сохранить', danger: true
+      }).then(function (leave) {
+        if (!leave) return;
+        Router.guard = null;
+        Router._leave = true;
+        location.hash = intended;
+      });
+    },
+
     start: function (fallback) {
       function handle() {
+        /* Возврат на прежний адрес после отказа от перехода — экран не перерисовываем,
+           чтобы сохранить уже введённые значения. */
+        if (Router._revert) { Router._revert = false; Router._prev = location.hash; return; }
+
+        var target = location.hash;
+        if (!Router._leave && Router.guard && Router._prev !== null &&
+          target !== Router._prev && Router.guard()) {
+          Router._revert = true;
+          location.hash = Router._prev;
+          Router.askLeave(target);
+          return;
+        }
+        Router._leave = false;
+        Router.guard = null;
+        Router._prev = location.hash;
+
         var r = Router.parse();
         var fn = Router.routes[r.name] || Router.routes[fallback];
         Router.current = r;
@@ -349,6 +386,9 @@
       if (Router._bound) window.removeEventListener('hashchange', Router._bound);
       Router._bound = handle;
       window.addEventListener('hashchange', handle);
+      window.onbeforeunload = function () {
+        return (Router.guard && Router.guard()) ? 'Есть несохранённые изменения' : null;
+      };
       handle();
     }
   };

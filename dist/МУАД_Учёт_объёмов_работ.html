@@ -2674,8 +2674,45 @@ th.day-head.today { background: var(--accent); }
       }
       return { name: name || '', params: params };
     },
+    /* Защита от потери несохранённых данных.
+       Экран с формой ввода выставляет Router.guard — функцию, которая
+       возвращает true, пока есть несохранённые изменения. */
+    guard: null,
+    _prev: null,
+    _revert: false,
+    _leave: false,
+
+    askLeave: function (intended) {
+      confirmBox({
+        title: 'Есть несохранённые данные',
+        text: 'Внесённые объёмы ещё не сохранены. Если перейти в другой раздел, они будут потеряны.',
+        okText: 'Уйти без сохранения', cancelText: 'Остаться и сохранить', danger: true
+      }).then(function (leave) {
+        if (!leave) return;
+        Router.guard = null;
+        Router._leave = true;
+        location.hash = intended;
+      });
+    },
+
     start: function (fallback) {
       function handle() {
+        /* Возврат на прежний адрес после отказа от перехода — экран не перерисовываем,
+           чтобы сохранить уже введённые значения. */
+        if (Router._revert) { Router._revert = false; Router._prev = location.hash; return; }
+
+        var target = location.hash;
+        if (!Router._leave && Router.guard && Router._prev !== null &&
+          target !== Router._prev && Router.guard()) {
+          Router._revert = true;
+          location.hash = Router._prev;
+          Router.askLeave(target);
+          return;
+        }
+        Router._leave = false;
+        Router.guard = null;
+        Router._prev = location.hash;
+
         var r = Router.parse();
         var fn = Router.routes[r.name] || Router.routes[fallback];
         Router.current = r;
@@ -2685,6 +2722,9 @@ th.day-head.today { background: var(--accent); }
       if (Router._bound) window.removeEventListener('hashchange', Router._bound);
       Router._bound = handle;
       window.addEventListener('hashchange', handle);
+      window.onbeforeunload = function () {
+        return (Router.guard && Router.guard()) ? 'Есть несохранённые изменения' : null;
+      };
       handle();
     }
   };
@@ -4663,6 +4703,7 @@ th.day-head.today { background: var(--accent); }
         C.Data.audit('Внесены объёмы', C.monthTitle(month) + ', ' +
           (mode === 'day' ? 'день ' + day : 'дни ' + days[0] + '–' + days[days.length - 1]) +
           ', ячеек: ' + n);
+        dirty = false;
         UI.toast('Данные сохранены', 'ok');
         UI.Router.go('site-entry', { month: month, mode: mode, day: day });
       }
@@ -4672,6 +4713,7 @@ th.day-head.today { background: var(--accent); }
       dirty = true;
       saveBtn.disabled = false;
     }
+    UI.Router.guard = function () { return dirty; };
 
     var dayPicker = mode === 'day'
       ? h('div.toolbar', [
@@ -4719,7 +4761,6 @@ th.day-head.today { background: var(--accent); }
       ])
     ]));
 
-    window.onbeforeunload = function () { return dirty ? 'Есть несохранённые изменения' : null; };
   }
 
   function dayOptions(month, dim, day, sm) {
@@ -4847,6 +4888,8 @@ th.day-head.today { background: var(--accent); }
       onclick: function () {
         var n = applyChanges(month, changes);
         C.Data.audit('Редактирование месячной таблицы', C.monthTitle(month) + ', изменено ячеек: ' + n);
+        changes = {};
+        UI.Router.guard = null;
         UI.toast('Изменения сохранены', 'ok');
         UI.Router.go('site-month', { month: month });
       }
@@ -4860,8 +4903,16 @@ th.day-head.today { background: var(--accent); }
             title: 'Отменить изменения?',
             text: 'Внесённые, но не сохранённые значения будут потеряны.',
             okText: 'Отменить изменения', danger: true
-          }).then(function (ok) { if (ok) UI.Router.go('site-month', { month: month }); });
-        } else UI.Router.go('site-month', { month: month });
+          }).then(function (ok) {
+            if (!ok) return;
+            changes = {};
+            UI.Router.guard = null;
+            UI.Router.go('site-month', { month: month });
+          });
+        } else {
+          UI.Router.guard = null;
+          UI.Router.go('site-month', { month: month });
+        }
       }
     }, 'Отмена');
 
@@ -4874,6 +4925,9 @@ th.day-head.today { background: var(--accent); }
     if (lock) content.appendChild(h('div.mb-3', lock));
     if (!sm.rows.length) { content.appendChild(noPlanNotice(month)); return; }
 
+    if (editing && !locked) {
+      UI.Router.guard = function () { return Object.keys(changes).length > 0; };
+    }
     if (editing) {
       content.appendChild(h('div.mb-3', UI.notice('info',
         'Режим редактирования: измените необходимые ячейки и нажмите «Сохранить изменения». ' +
