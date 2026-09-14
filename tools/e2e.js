@@ -127,6 +127,26 @@ function fail(msg) { errors.push(msg); console.log('  ✗', msg); }
   await page.waitForTimeout(500);
   await shot(page, 'site-dash');
 
+  // по умолчанию форма ввода открывается на предыдущем дне
+  const curMonth = await page.evaluate(() => {
+    const C = window.CORE;
+    const y = new Date(); y.setDate(y.getDate() - 1);
+    const mk = C.monthKey(y);
+    const src = C.Data.plan('ldu', '2026-01');
+    C.Data.setPlan('ldu', mk, Object.assign({}, src, { month: mk }));   // план на текущий период
+    return { mk: mk, day: y.getDate() };
+  });
+  await page.evaluate(() => { location.hash = '#/site-entry'; });
+  await page.waitForTimeout(700);
+  const def = await page.evaluate(() => {
+    const sel = document.querySelector('.card-head select');
+    const opt = sel && sel.options[sel.selectedIndex];
+    return { value: sel ? sel.value : null, label: opt ? opt.textContent : null, hash: location.hash };
+  });
+  (String(def.value) === String(curMonth.day) && /вчера/.test(def.label || ''))
+    ? ok('форма ввода открылась на предыдущем дне: ' + def.label)
+    : fail('ожидался день ' + curMonth.day + ', открыт: ' + JSON.stringify(def));
+
   await page.evaluate(() => { location.hash = '#/site-entry?month=2026-01&day=5'; });
   await page.waitForTimeout(600);
   await page.waitForSelector('td.day-cell input');

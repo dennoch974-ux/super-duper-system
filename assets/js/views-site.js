@@ -287,12 +287,15 @@
   /* ===================== ВНЕСЕНИЕ ОБЪЁМОВ ===================== */
 
   function viewEntry(params) {
-    var month = params.month || C.todayKey();
+    /* По умолчанию открывается предыдущий день: объёмы вносятся за прошедшие сутки.
+       Если вчерашний день пришёлся на прошлый месяц, открывается он. */
+    var yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    var month = params.month || C.monthKey(yesterday);
     var mode = params.mode === 'week' ? 'week' : 'day';
     var sm = C.Calc.siteMonth(siteId(), month);
     var dim = sm.days;
-    var today = new Date();
-    var defDay = (C.monthKey(today) === month) ? today.getDate() : 1;
+    var defDay = (C.monthKey(yesterday) === month) ? yesterday.getDate() : 1;
     var day = Math.min(Math.max(parseInt(params.day, 10) || defDay, 1), dim);
 
     var content = setPage('Внесение объёмов', C.Data.siteName(siteId()) + ' · ' + C.monthTitle(month));
@@ -399,11 +402,17 @@
   function dayOptions(month, dim, day, sm) {
     var filled = {};
     sm.filledDays.forEach(function (d) { filled[d] = 1; });
+    var today = new Date();
+    var yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    var todayNo = C.monthKey(today) === month ? today.getDate() : 0;
+    var yestNo = C.monthKey(yesterday) === month ? yesterday.getDate() : 0;
     var opts = [];
     for (var d = 1; d <= dim; d++) {
+      var mark = d === yestNo ? ' · вчера' : (d === todayNo ? ' · сегодня' : '');
       opts.push(h('option', { value: d, selected: d === day },
         C.pad2(d) + '.' + C.pad2(C.parseMonth(month).month + 1) + ' · ' + C.WEEKDAYS[C.weekdayOf(month, d)] +
-        (filled[d] ? ' · внесено' : '')));
+        mark + (filled[d] ? ' · внесено' : '')));
     }
     return opts;
   }

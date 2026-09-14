@@ -210,10 +210,10 @@
       aliases: ['ДУ6', 'ДУ-6', 'ДУ №6', 'ЧЕРНЫШЕВСКИЙ', 'ЧЕРНЫШЕВСК']
     },
     {
-      id: 'du8', code: 'ДУ-8', name: 'Дорожный участок №8 (п. Морковка)', short: 'ДУ №8',
+      id: 'du8', code: 'ДУ-8', name: 'Дорожный участок №8 (п. Моркока)', short: 'ДУ №8',
       chief: 'Хайбулинов Рашит Халимолдоевич', staff: 41, order: 5,
       roads: 'а/д «Анабар» км 196 – км 398 (202 км); автозимник 269-Накын-Нюрба (280 км)',
-      aliases: ['ДУ8', 'ДУ-8', 'ДУ №8', 'МОРКОВКА', 'УЧАСТОК8']
+      aliases: ['ДУ8', 'ДУ-8', 'ДУ №8', 'МОРКОКА', 'МОРКОВКА', 'УЧАСТОК8']
     },
     {
       id: 'udu', code: 'УДУ', name: 'Удачнинский дорожный участок', short: 'Удачнинский ДУ',
@@ -272,7 +272,7 @@
   /* ===================== ХРАНИЛИЩЕ ===================== */
 
   var STORAGE_KEY = 'muad.volumes.db.v1';
-  var DB_VERSION = 1;
+  var DB_VERSION = 2;
 
   function emptyDb() {
     return {
@@ -325,8 +325,17 @@
   }
 
   function migrate(db) {
-    if (!db.version) db.version = DB_VERSION;
+    if (!db.version) db.version = 1;
     var base = emptyDb();
+
+    /* Версия 2: исправлено написание посёлка в наименовании ДУ №8 */
+    if (db.version < 2 && db.sites) {
+      db.sites.forEach(function (s) {
+        if (s.name) s.name = s.name.replace('Морковка', 'Моркока');
+        if (s.aliases && s.aliases.indexOf('МОРКОКА') < 0) s.aliases = s.aliases.concat(['МОРКОКА']);
+      });
+    }
+    db.version = DB_VERSION;
     db.settings = Object.assign({}, base.settings, db.settings || {});
     db.plans = db.plans || {};
     db.facts = db.facts || {};
@@ -648,9 +657,12 @@
   function missingDays(siteId, month) {
     var sm = siteMonth(siteId, month);
     var dim = sm.days;
+    /* Данные вносятся за прошедший день, поэтому текущий день
+       ещё не считается пропущенным. */
     var today = new Date();
     var m = parseMonth(month);
-    var lastDay = (today.getFullYear() === m.year && today.getMonth() === m.month) ? today.getDate() : dim;
+    var isCurrentMonth = today.getFullYear() === m.year && today.getMonth() === m.month;
+    var lastDay = isCurrentMonth ? today.getDate() - 1 : dim;
     var planned = {};
     sm.rows.forEach(function (r) {
       for (var d = 1; d <= dim; d++) {
