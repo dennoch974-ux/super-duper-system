@@ -1,0 +1,879 @@
+<title>Аэропорт Мирный: разбор перехода</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;700;800&family=Golos+Text:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap">
+
+<style>
+:root{
+  --ground:#F4F7FA; --surface:#FFFFFF; --surface-2:#EAF0F6;
+  --ink:#0E1B29; --ink-2:#31465C; --muted:#5F778F;
+  --hair:#D5E0EA; --hair-2:#C0D0DE;
+  --brand:#0F3D6E; --brand-soft:#E3EDF7;
+  --signal:#B36A0D; --signal-soft:#FAF0DF;
+  --good:#1C6E4C; --warn:#A8720F; --crit:#9C3526;
+  --crit-soft:#FAE8E4; --good-soft:#E3F1EA;
+  --c1:#3573BE; --c2:#1F9A8C; --c3:#CF7A12;
+  --grid:#DFE8F0; --bar:#3573BE; --bar-2:#CF7A12; --bar-mute:#9FB8CE;
+  --shadow:0 1px 2px rgba(14,27,41,.06),0 8px 24px -12px rgba(14,27,41,.18);
+  --display:"Manrope",system-ui,"Segoe UI",sans-serif;
+  --body:"Golos Text",system-ui,"Segoe UI",sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,"Cascadia Mono",Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --ground:#0A121C; --surface:#111E2C; --surface-2:#16283A;
+    --ink:#E9F1F8; --ink-2:#B7CADA; --muted:#8AA5BC;
+    --hair:#21364B; --hair-2:#2C4560;
+    --brand:#8CBBE8; --brand-soft:#16293D;
+    --signal:#E0A03A; --signal-soft:#2A2113;
+    --good:#4FBE8C; --warn:#D9A43F; --crit:#E0705C;
+    --crit-soft:#2E1A17; --good-soft:#12261E;
+    --c1:#4E90D8; --c2:#2BA286; --c3:#BC8526;
+    --grid:#1E3245; --bar:#4E90D8; --bar-2:#BC8526; --bar-mute:#3C5670;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 28px -14px rgba(0,0,0,.7);
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#0A121C; --surface:#111E2C; --surface-2:#16283A;
+  --ink:#E9F1F8; --ink-2:#B7CADA; --muted:#8AA5BC;
+  --hair:#21364B; --hair-2:#2C4560;
+  --brand:#8CBBE8; --brand-soft:#16293D;
+  --signal:#E0A03A; --signal-soft:#2A2113;
+  --good:#4FBE8C; --warn:#D9A43F; --crit:#E0705C;
+  --crit-soft:#2E1A17; --good-soft:#12261E;
+  --c1:#4E90D8; --c2:#2BA286; --c3:#BC8526;
+  --grid:#1E3245; --bar:#4E90D8; --bar-2:#BC8526; --bar-mute:#3C5670;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 28px -14px rgba(0,0,0,.7);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--ground); color:var(--ink);
+  font-family:var(--body); font-size:16px; line-height:1.62;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1080px; margin:0 auto; padding-inline:20px; padding-block:0}
+h1,h2,h3,h4{font-family:var(--display); text-wrap:balance; margin:0}
+p{margin:0}
+a{color:var(--brand)}
+:focus-visible{outline:2px solid var(--signal); outline-offset:3px; border-radius:3px}
+@media (prefers-reduced-motion:reduce){*{animation:none!important; transition:none!important}}
+
+/* ── навигация ── */
+.topbar{
+  position:sticky; top:env(safe-area-inset-top,0px); z-index:40;
+  background:color-mix(in srgb,var(--ground) 92%,transparent);
+  backdrop-filter:blur(8px); border-bottom:1px solid var(--hair);
+}
+.topbar .wrap{display:flex; align-items:center; gap:18px; min-height:52px; flex-wrap:wrap}
+.mark{font-family:var(--mono); font-size:12px; font-weight:700; letter-spacing:.1em; color:var(--brand); white-space:nowrap}
+.navlinks{display:flex; gap:16px; overflow-x:auto; scrollbar-width:none; margin-left:auto}
+.navlinks::-webkit-scrollbar{display:none}
+.navlinks a{
+  font-family:var(--mono); font-size:11.5px; letter-spacing:.04em; color:var(--muted);
+  text-decoration:none; white-space:nowrap; padding:6px 0; border-bottom:2px solid transparent;
+}
+.navlinks a:hover{color:var(--ink); border-bottom-color:var(--signal)}
+
+/* ── шапка ── */
+.masthead{padding-block:56px 40px; border-bottom:1px solid var(--hair)}
+.eyebrow{
+  font-family:var(--mono); font-size:12px; font-weight:500; letter-spacing:.16em;
+  text-transform:uppercase; color:var(--signal);
+}
+h1{font-size:clamp(34px,6vw,58px); font-weight:800; letter-spacing:-.025em; line-height:1.04; margin-top:14px}
+.dek{font-size:clamp(16px,2.2vw,19px); color:var(--ink-2); max-width:62ch; margin-top:18px}
+
+/* аэронавигационная карточка объекта */
+.aip{
+  margin-top:30px; border:1px solid var(--hair-2); border-radius:4px;
+  background:var(--surface); font-family:var(--mono); font-size:12.5px;
+  display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); overflow:hidden;
+}
+.aip div{padding:12px 14px; border-right:1px solid var(--hair); border-bottom:1px solid var(--hair)}
+.aip div:last-child{border-right:0}
+.aip dt{color:var(--muted); font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; margin:0 0 4px}
+.aip dd{margin:0; color:var(--ink); font-weight:500; font-size:13px}
+
+/* ── секции ── */
+section{padding-block:52px; border-bottom:1px solid var(--hair)}
+.sechead{display:flex; align-items:baseline; gap:14px; margin-bottom:8px}
+.secnum{font-family:var(--mono); font-size:13px; font-weight:700; color:var(--signal); flex:none}
+h2{font-size:clamp(24px,3.6vw,34px); font-weight:800; letter-spacing:-.02em; line-height:1.14}
+.lede{color:var(--ink-2); max-width:68ch; margin-top:14px; font-size:17px}
+.prose{max-width:68ch}
+.prose p + p{margin-top:14px}
+h3{font-size:19px; font-weight:700; letter-spacing:-.01em; margin-top:34px}
+h3 + *{margin-top:12px}
+
+/* ── карточки ── */
+.grid{display:grid; gap:16px; margin-top:26px}
+.g2{grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+.g3{grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+.card{
+  background:var(--surface); border:1px solid var(--hair); border-radius:6px;
+  padding:22px; display:flex; flex-direction:column; gap:10px;
+}
+.card h4{font-size:17px; font-weight:700; letter-spacing:-.01em}
+.card p{font-size:14.5px; color:var(--ink-2); line-height:1.55}
+.card .tag{
+  font-family:var(--mono); font-size:10.5px; letter-spacing:.1em; text-transform:uppercase;
+  color:var(--muted);
+}
+.key{background:var(--brand); border-color:var(--brand); color:#fff; box-shadow:var(--shadow)}
+.key h4,.key p{color:#fff}
+.key p{color:#DCE9F6}
+.key .tag{color:#9FC5E8}
+:root[data-theme="dark"] .key,
+:root:not([data-theme="light"]) .key{color:var(--ink)}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]) .key{background:var(--surface-2); border-color:var(--hair-2)}
+  :root:not([data-theme="light"]) .key h4{color:var(--ink)}
+  :root:not([data-theme="light"]) .key p{color:var(--ink-2)}
+  :root:not([data-theme="light"]) .key .tag{color:var(--brand)}
+}
+:root[data-theme="dark"] .key{background:var(--surface-2); border-color:var(--hair-2)}
+:root[data-theme="dark"] .key h4{color:var(--ink)}
+:root[data-theme="dark"] .key p{color:var(--ink-2)}
+:root[data-theme="dark"] .key .tag{color:var(--brand)}
+
+/* ── статблок ── */
+.stats{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:1px; background:var(--hair);
+  border:1px solid var(--hair); border-radius:6px; overflow:hidden; margin-top:26px}
+.stat{background:var(--surface); padding:20px 18px}
+.stat .v{font-family:var(--display); font-size:clamp(22px,3vw,30px); font-weight:800; letter-spacing:-.03em; line-height:1.1;
+  font-variant-numeric:tabular-nums}
+.stat .l{font-size:13px; color:var(--muted); margin-top:6px; line-height:1.4}
+
+/* ── таблицы ── */
+.tablewrap{overflow-x:auto; margin-top:24px; border:1px solid var(--hair); border-radius:6px; background:var(--surface)}
+table{border-collapse:collapse; width:100%; min-width:620px; font-size:14.5px}
+th,td{text-align:left; padding:12px 14px; border-bottom:1px solid var(--hair); vertical-align:top}
+thead th{
+  font-family:var(--mono); font-size:10.5px; letter-spacing:.1em; text-transform:uppercase;
+  color:var(--muted); font-weight:500; background:var(--surface-2); border-bottom:1px solid var(--hair-2);
+  position:sticky; top:0;
+}
+tbody tr:last-child td{border-bottom:0}
+td.num{font-family:var(--mono); font-variant-numeric:tabular-nums; white-space:nowrap}
+td strong{font-weight:600}
+.new{color:var(--brand); font-weight:600}
+.old{color:var(--muted)}
+
+/* чипы состояния */
+.chip{
+  display:inline-flex; align-items:center; gap:6px; font-family:var(--mono); font-size:11px;
+  font-weight:700; padding:3px 8px; border-radius:3px; white-space:nowrap;
+}
+.chip::before{content:""; width:6px; height:6px; border-radius:50%; background:currentColor; flex:none}
+.chip.c{color:var(--crit); background:var(--crit-soft)}
+.chip.w{color:var(--warn); background:var(--signal-soft)}
+.chip.g{color:var(--good); background:var(--good-soft)}
+
+/* ── графики ── */
+figure{margin:26px 0 0; background:var(--surface); border:1px solid var(--hair); border-radius:6px; padding:22px 20px 16px}
+figcaption{font-size:13px; color:var(--muted); margin-top:14px; line-height:1.5; max-width:72ch}
+.figtitle{font-family:var(--display); font-size:16px; font-weight:700; letter-spacing:-.01em; margin-bottom:2px}
+.figsub{font-family:var(--mono); font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); margin-bottom:16px}
+svg{display:block; width:100%; height:auto; overflow:visible}
+.axis{font-family:var(--mono); font-size:11px; fill:var(--muted)}
+.vlab{font-family:var(--mono); font-size:12.5px; font-weight:700; fill:var(--ink); font-variant-numeric:tabular-nums}
+.vlab-on{fill:#fff}
+.gridline{stroke:var(--grid); stroke-width:1}
+.bar{transition:opacity .12s}
+.bar:hover{opacity:.82; cursor:default}
+.legend{display:flex; flex-wrap:wrap; gap:16px; margin-top:16px}
+.legend span{display:inline-flex; align-items:center; gap:7px; font-size:13px; color:var(--ink-2)}
+.legend i{width:11px; height:11px; border-radius:2px; flex:none}
+#tip{
+  position:fixed; z-index:90; pointer-events:none; opacity:0; transform:translate(-50%,-115%);
+  background:var(--ink); color:var(--ground); font-family:var(--mono); font-size:12px;
+  padding:6px 10px; border-radius:4px; white-space:nowrap; transition:opacity .1s;
+}
+
+/* ── список блоков ── */
+.blocks{counter-reset:b; display:grid; gap:1px; background:var(--hair); border:1px solid var(--hair);
+  border-radius:6px; overflow:hidden; margin-top:26px; grid-template-columns:repeat(auto-fit,minmax(290px,1fr))}
+.block{background:var(--surface); padding:20px; counter-increment:b}
+.block::before{
+  content:counter(b,decimal-leading-zero); font-family:var(--mono); font-size:11px; font-weight:700;
+  color:var(--signal); display:block; margin-bottom:8px; letter-spacing:.08em;
+}
+.block b{display:block; font-family:var(--display); font-size:15.5px; font-weight:700; margin-bottom:6px; letter-spacing:-.01em}
+.block span{font-size:13.5px; color:var(--ink-2); line-height:1.5}
+
+/* ── два столбца за/против ── */
+.pro-con{display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:16px; margin-top:26px}
+.pc{background:var(--surface); border:1px solid var(--hair); border-radius:6px; padding:22px}
+.pc h4{font-size:16px; font-weight:700; margin-bottom:14px}
+.pc.yes h4{color:var(--good)}
+.pc.no h4{color:var(--crit)}
+.pc ul{margin:0; padding-left:20px; display:flex; flex-direction:column; gap:9px}
+.pc li{font-size:14.5px; color:var(--ink-2); line-height:1.5}
+
+/* ── вывод-плашка ── */
+.verdict{
+  margin-top:26px; background:var(--brand-soft); border:1px solid var(--hair-2);
+  border-radius:6px; padding:24px;
+}
+.verdict .tag{font-family:var(--mono); font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--signal)}
+.verdict p{margin-top:10px; font-size:17px; color:var(--ink); max-width:74ch; line-height:1.55}
+
+/* ── дорожная карта ── */
+.road{display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:16px; margin-top:26px}
+.stage{background:var(--surface); border:1px solid var(--hair); border-radius:6px; padding:20px}
+.stage .st{font-family:var(--mono); font-size:11px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--signal)}
+.stage h4{font-size:16px; font-weight:700; margin:6px 0 12px}
+.stage ul{margin:0; padding-left:18px; display:flex; flex-direction:column; gap:7px}
+.stage li{font-size:13.5px; color:var(--ink-2); line-height:1.45}
+
+/* ── источники / подвал ── */
+.srcs{columns:2 260px; column-gap:32px; margin-top:22px}
+.srcs a{display:block; font-size:13.5px; margin-bottom:9px; break-inside:avoid; color:var(--ink-2); text-decoration:none;
+  border-bottom:1px solid var(--hair); padding-bottom:9px}
+.srcs a:hover{color:var(--brand)}
+footer{padding-block:38px 56px; color:var(--muted); font-size:13.5px}
+footer p{max-width:74ch}
+footer p + p{margin-top:10px}
+.disclaimer{
+  margin-top:26px; border:1px dashed var(--hair-2); border-radius:6px; padding:18px 20px;
+  font-size:13.5px; color:var(--ink-2); background:var(--surface);
+}
+.disclaimer b{font-family:var(--mono); font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--signal); display:block; margin-bottom:8px}
+.marks{font-family:var(--mono); font-size:12px; color:var(--muted); margin-top:12px}
+.marks b{color:var(--ink); font-weight:700}
+
+@media (max-width:640px){
+  .masthead{padding-block:36px 28px}
+  section{padding-block:40px}
+  .srcs{columns:1}
+  .navlinks{margin-left:0}
+}
+</style>
+
+<div class="topbar">
+  <div class="wrap">
+    <span class="mark">MJZ · UERR</span>
+    <nav class="navlinks" aria-label="Разделы">
+      <a href="#status">Статус</a>
+      <a href="#capacity">Мощность</a>
+      <a href="#transition">Переход</a>
+      <a href="#risks">Риски</a>
+      <a href="#viability">Целесообразность</a>
+      <a href="#growth">Рост</a>
+      <a href="#revenue">Доходы</a>
+      <a href="#road">Дорожная карта</a>
+    </nav>
+  </div>
+</div>
+
+<header class="masthead">
+  <div class="wrap">
+    <p class="eyebrow">Аналитическая записка · Республика Саха (Якутия)</p>
+    <h1>Новый аэропортовый комплекс «Мирный»</h1>
+    <p class="dek">Переход с действующей площадки на новую: что изменится в пропускной способности, где узкие места, сколько это будет стоить в первый год и на чём предприятию зарабатывать, когда терминал втрое больше спроса.</p>
+
+    <dl class="aip">
+      <div><dt>Коды</dt><dd>MJZ / UERR</dd></div>
+      <div><dt>Новая ВПП</dt><dd>2860 × 44 м</dd></div>
+      <div><dt>Перрон</dt><dd>18 мест стоянки</dd></div>
+      <div><dt>Аэровокзал</dt><dd>300 пасс./час</dd></div>
+      <div><dt>ТЗК</dt><dd>1,7 тыс. тонн</dd></div>
+      <div><dt>Регулярные рейсы</dt><dd>I квартал 2027</dd></div>
+    </dl>
+  </div>
+</header>
+
+<!-- ══════════ РЕЗЮМЕ ══════════ -->
+<section id="summary">
+  <div class="wrap">
+    <div class="sechead"><span class="secnum">01</span><h2>Три вывода, определяющие всё остальное</h2></div>
+    <p class="lede">Записка длинная, но сводится к трём утверждениям. Если читать только этот раздел — читать нужно его.</p>
+
+    <div class="grid g3">
+      <article class="card key">
+        <span class="tag">Вывод 1 · Готовность</span>
+        <h4>Это ввод нового аэродрома, а не переезд в здание</h4>
+        <p>Новая точка на карте, новые координаты порогов ВПП, новые схемы захода, новый пункт в AIP. Критический путь — лётное поле, средства РТОП и разрешительные процедуры, а не отделка терминала.</p>
+      </article>
+      <article class="card">
+        <span class="tag">Вывод 2 · Мощность</span>
+        <h4>Мощность превышает спрос примерно втрое</h4>
+        <p>300 пасс./час — это порядка 1 млн пассажиров в год. Фактический поток Мирного за всю его историю не выходил за 360 тыс. Загрузка нового терминала составит 30–40 %.</p>
+      </article>
+      <article class="card">
+        <span class="tag">Вывод 3 · Экономика</span>
+        <h4>В первый год результат ухудшится, а не улучшится</h4>
+        <p>Отопление, содержание систем, уборка увеличенной площади, амортизация и налог на имущество растут в день ввода. Пассажиропоток в этот день не меняется.</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ СТАТУС ══════════ -->
+<section id="status">
+  <div class="wrap">
+    <div class="sechead"><span class="secnum">02</span><h2>Статус объекта: терминал почти готов, аэропорт — нет</h2></div>
+    <p class="lede">На сентябрь 2026 года руководитель Росавиации отметил высокий темп работ по аэровокзальному комплексу. Разрыв между двумя цифрами готовности — главный управленческий факт проекта.</p>
+
+    <figure>
+      <p class="figtitle">Строительная готовность по состоянию на сентябрь 2026 г.</p>
+      <p class="figsub">процентов от объёма работ</p>
+      <svg viewBox="0 0 640 152" role="img" aria-label="Аэровокзальный комплекс — 90 процентов, сооружения лётного поля — 68 процентов">
+        <line class="gridline" x1="155" y1="6" x2="155" y2="120"></line>
+        <line class="gridline" x1="310" y1="6" x2="310" y2="120"></line>
+        <line class="gridline" x1="465" y1="6" x2="465" y2="120"></line>
+        <line class="gridline" x1="620" y1="6" x2="620" y2="120"></line>
+
+        <text class="axis" x="0" y="16" fill="var(--ink-2)">Аэровокзальный комплекс</text>
+        <rect class="bar" data-tip="Аэровокзальный комплекс — свыше 90 %" x="0" y="24" width="558" height="24" rx="4" fill="var(--bar)"></rect>
+        <text class="vlab" x="568" y="41">90 %</text>
+
+        <text class="axis" x="0" y="82" fill="var(--ink-2)">Сооружения лётного поля</text>
+        <rect class="bar" data-tip="Сооружения лётного поля — 68 %" x="0" y="90" width="421" height="24" rx="4" fill="var(--bar-2)"></rect>
+        <text class="vlab" x="431" y="107">68 %</text>
+
+        <text class="axis" x="155" y="140" text-anchor="middle">25</text>
+        <text class="axis" x="310" y="140" text-anchor="middle">50</text>
+        <text class="axis" x="465" y="140" text-anchor="middle">75</text>
+        <text class="axis" x="620" y="140" text-anchor="middle">100 %</text>
+      </svg>
+      <figcaption>Шкала общая для обоих показателей. Завершение строительно-монтажных работ по зданиям планировалось на октябрь 2026 г., первый технический рейс — на конец 2026 г., регулярные рейсы — на I квартал 2027 г.</figcaption>
+    </figure>
+
+    <h3>Почему готовность терминала ничего не решает</h3>
+    <div class="prose">
+      <p>Процедуры ввода последовательны и связаны между собой. Средства радиотехнического обеспечения полётов монтируются на лётном поле — значит, пока оно не готово, нет и лётной проверки. Без лётной проверки не утверждаются схемы захода. Без утверждённых схем невозможна публикация аэронавигационных данных, а она возможна только в фиксированные даты 28-суточного цикла AIRAC.</p>
+      <p>Получается, что календарь диктует условия стройке, а не наоборот. К этому добавляется отдельная длинная процедура обеспечения транспортной безопасности: категорирование объекта, оценка уязвимости, разработка и согласование плана. Её традиционно начинают позже, чем следует.</p>
+    </div>
+
+    <div class="verdict">
+      <span class="tag">Рекомендация</span>
+      <p>Вынести разрешительные процедуры в отдельный сетевой график с обратным отсчётом от даты первого регулярного рейса и привязкой к циклам AIRAC. Заложить резерв 3–4 месяца между строительной готовностью и началом полётов — отраслевой опыт показывает, что этот интервал систематически недооценивают.</p>
+    </div>
+
+    <h3>Хронология: три переноса, смещение более трёх лет</h3>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Период</th><th>Заявленный срок ввода</th><th>Что произошло</th></tr></thead>
+        <tbody>
+          <tr><td class="num">2018–2019</td><td class="old">—</td><td>Решение принято, определено финансирование: 10,4 млрд руб. из федерального бюджета и 10,4 млрд руб. от АЛРОСА</td></tr>
+          <tr><td class="num">2020</td><td class="old">—</td><td>Тендер на терминал на 7,19 млрд руб., спор в ФАС, задержка контрактации</td></tr>
+          <tr><td class="num">≈ 2021</td><td>декабрь 2023</td><td>Первоначальный публичный срок</td></tr>
+          <tr><td class="num">≈ 2023</td><td>середина 2025</td><td>Первый перенос</td></tr>
+          <tr><td class="num">2025</td><td>2026–2027</td><td>Второй перенос; строительная готовность около 60 %</td></tr>
+          <tr><td class="num">апрель 2026</td><td>2027</td><td>Готовность превышает 80 %</td></tr>
+          <tr><td class="num">сентябрь 2026</td><td><strong class="new">I квартал 2027</strong></td><td>Аэровокзальный комплекс свыше 90 %, лётное поле 68 %</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Причина задержек останется с предприятием навсегда</h3>
+    <div class="prose">
+      <p>Работы по взлётно-посадочной полосе приостанавливались из-за изменения геокриологических условий. Подрядчик совместно с Институтом мерзлотоведения прорабатывал технические решения по термостабилизации грунтов; на объекте применена специальная технология обеспечения устойчивости зданий.</p>
+      <p>Это не строительная накладка, а постоянная характеристика объекта. Системы термостабилизации — сезонно-охлаждающие устройства, вентилируемые подполья, температурный мониторинг — это эксплуатируемые инженерные системы со своим регламентом, отказами и расходами. Появляется новая статья затрат и новая компетенция: геотехнический мониторинг оснований ВПП, перрона и зданий. Самый опасный период для покрытий на мерзлоте — апрель и май, когда оттаивает деятельный слой.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ МОЩНОСТЬ ══════════ -->
+<section id="capacity">
+  <div class="wrap">
+    <div class="sechead"><span class="secnum">03</span><h2>Пропускная способность: главный разрыв проекта</h2></div>
+    <p class="lede">Новый аэровокзал рассчитан на 300 пассажиров в час. Пересчёт этой часовой мощности в годовую с учётом суточной и сезонной неравномерности даёт порядок 1,0–1,3 млн пассажиров. Фактический поток Мирного — в три-четыре раза меньше.</p>
+
+    <figure>
+      <p class="figtitle">Пассажиропоток аэропорта Мирный и ёмкость нового терминала</p>
+      <p class="figsub">тысяч пассажиров в год</p>
+      <svg viewBox="0 0 640 300" role="img" aria-label="Пассажиропоток: 2017 — 291 тысяча, 2018 — 342 тысячи, 2021 — 269 тысяч, прогноз 400 тысяч, при ёмкости нового терминала около 1000 тысяч">
+        <line class="gridline" x1="56" y1="250" x2="636" y2="250"></line>
+        <line class="gridline" x1="56" y1="192" x2="636" y2="192"></line>
+        <line class="gridline" x1="56" y1="134" x2="636" y2="134"></line>
+        <line class="gridline" x1="56" y1="76" x2="636" y2="76"></line>
+        <line class="gridline" x1="56" y1="18" x2="636" y2="18"></line>
+        <text class="axis" x="50" y="254" text-anchor="end">0</text>
+        <text class="axis" x="50" y="196" text-anchor="end">250</text>
+        <text class="axis" x="50" y="138" text-anchor="end">500</text>
+        <text class="axis" x="50" y="80" text-anchor="end">750</text>
+        <text class="axis" x="50" y="22" text-anchor="end">1000</text>
+
+        <rect class="bar" data-tip="2017 год — 291,4 тыс. пассажиров" x="76"  y="182" width="72" height="68" rx="4" fill="var(--bar-mute)"></rect>
+        <rect class="bar" data-tip="2018 год — 342,2 тыс. пассажиров" x="184" y="171" width="72" height="79" rx="4" fill="var(--bar-mute)"></rect>
+        <rect class="bar" data-tip="2021 год — 269,4 тыс. пассажиров" x="292" y="188" width="72" height="62" rx="4" fill="var(--bar-mute)"></rect>
+        <rect class="bar" data-tip="Прогноз АЛРОСА — 350–400 тыс. пассажиров" x="400" y="158" width="72" height="92" rx="4" fill="var(--bar)"></rect>
+        <rect class="bar" data-tip="Ёмкость нового терминала — около 1 000 тыс. пассажиров" x="508" y="18" width="72" height="232" rx="4" fill="var(--bar-2)"></rect>
+
+        <text class="vlab" x="112" y="176" text-anchor="middle">291</text>
+        <text class="vlab" x="220" y="165" text-anchor="middle">342</text>
+        <text class="vlab" x="328" y="182" text-anchor="middle">269</text>
+        <text class="vlab" x="436" y="152" text-anchor="middle">400</text>
+        <text class="vlab" x="544" y="12"  text-anchor="middle">≈ 1000</text>
+
+        <text class="axis" x="112" y="270" text-anchor="middle">2017</text>
+        <text class="axis" x="220" y="270" text-anchor="middle">2018</text>
+        <text class="axis" x="328" y="270" text-anchor="middle">2021</text>
+        <text class="axis" x="436" y="270" text-anchor="middle">прогноз</text>
+        <text class="axis" x="544" y="270" text-anchor="middle">ёмкость</text>
+        <text class="axis" x="112" y="286" text-anchor="middle" fill="var(--muted)">факт</text>
+        <text class="axis" x="220" y="286" text-anchor="middle" fill="var(--muted)">факт</text>
+        <text class="axis" x="328" y="286" text-anchor="middle" fill="var(--muted)">факт</text>
+        <text class="axis" x="436" y="286" text-anchor="middle" fill="var(--muted)">АЛРОСА</text>
+        <text class="axis" x="544" y="286" text-anchor="middle" fill="var(--muted)">новый терминал</text>
+      </svg>
+      <figcaption>Непрерывного ряда за 2022–2026 гг. в открытых источниках нет. Оценка ёмкости рассчитана от часовой мощности 300 пасс./час: при круглосуточной работе и плотном расписании — 1,0–1,3 млн пасс./год, по консервативному варианту — около 770 тыс.</figcaption>
+    </figure>
+
+    <div class="stats">
+      <div class="stat"><div class="v">≈ 360 тыс.</div><div class="l">исторический максимум пассажиропотока</div></div>
+      <div class="stat"><div class="v">−21 %</div><div class="l">2021 год к уровню 2018-го</div></div>
+      <div class="stat"><div class="v">34,3 тыс.</div><div class="l">население Мирного в 2025 г. против 37,2 тыс. в 2010-м</div></div>
+      <div class="stat"><div class="v">606</div><div class="l">работников авиапредприятия (2022 г.), было 670 в 2018-м</div></div>
+    </div>
+
+    <figure>
+      <p class="figtitle">Загрузка нового терминала при разных сценариях спроса</p>
+      <p class="figsub">процентов проектной мощности</p>
+      <svg viewBox="0 0 640 252" role="img" aria-label="Загрузка терминала: 270 тысяч — 27 процентов, 360 тысяч — 36, 400 тысяч — 40, 500 тысяч — 50, 1 миллион — 100 процентов">
+        <line class="gridline" x1="540" y1="4" x2="540" y2="232"></line>
+
+        <text class="axis" x="0" y="12" fill="var(--ink-2)">270 тыс. — уровень 2021 г.</text>
+        <rect class="bar" data-tip="270 тыс. пассажиров — загрузка 27 %" x="0" y="18" width="146" height="20" rx="4" fill="var(--bar)"></rect>
+        <text class="vlab" x="156" y="33">27 %</text>
+
+        <text class="axis" x="0" y="60" fill="var(--ink-2)">360 тыс. — исторический максимум</text>
+        <rect class="bar" data-tip="360 тыс. пассажиров — загрузка 36 %" x="0" y="66" width="194" height="20" rx="4" fill="var(--bar)"></rect>
+        <text class="vlab" x="204" y="81">36 %</text>
+
+        <text class="axis" x="0" y="108" fill="var(--ink-2)">400 тыс. — прогноз АЛРОСА</text>
+        <rect class="bar" data-tip="400 тыс. пассажиров — загрузка 40 %" x="0" y="114" width="216" height="20" rx="4" fill="var(--bar)"></rect>
+        <text class="vlab" x="226" y="129">40 %</text>
+
+        <text class="axis" x="0" y="156" fill="var(--ink-2)">500 тыс. — с новыми драйверами спроса</text>
+        <rect class="bar" data-tip="500 тыс. пассажиров — загрузка 50 %" x="0" y="162" width="270" height="20" rx="4" fill="var(--bar)"></rect>
+        <text class="vlab" x="280" y="177">50 %</text>
+
+        <text class="axis" x="0" y="204" fill="var(--ink-2)">1 000 тыс. — порог окупаемости терминала</text>
+        <rect class="bar" data-tip="1 млн пассажиров — загрузка 100 %, порог окупаемости терминала" x="0" y="210" width="540" height="20" rx="4" fill="var(--c2)"></rect>
+        <text class="vlab" x="550" y="225">100 %</text>
+
+        <text class="axis" x="540" y="248" text-anchor="middle">100 % мощности</text>
+      </svg>
+      <figcaption>Отраслевые эксперты ещё в 2019 г. называли мощность 300 пасс./час избыточной для аэропорта, чей поток вряд ли превысит 500 тыс. чел./год, и указывали, что новый терминал экономически оправдан при реальном или перспективном потоке около 1 млн пассажиров.</figcaption>
+    </figure>
+
+    <div class="verdict">
+      <span class="tag">Что это значит</span>
+      <p>Разрыв между 36 % и 100 % — и есть предмет стратегии предприятия на ближайшие десять лет. Закрыть его только пассажирами невозможно: население города сокращается, а спрос производен от инвестиционного цикла АЛРОСА. Закрыть его комбинацией «груз + топливо + сервис + неавиационная выручка» — можно.</p>
+    </div>
+
+    <h3>Как есть и как будет</h3>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Показатель</th><th>Действующий аэропорт</th><th>Новый комплекс</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Расстояние от города</strong></td><td class="old">≈ 4 км</td><td class="new">≈ 7 км</td></tr>
+          <tr><td><strong>Взлётно-посадочная полоса</strong></td><td class="old">≈ 2800 × 45 м, PCN 45/R/A/W/T</td><td class="new">2860 × 44 м, новое покрытие</td></tr>
+          <tr><td><strong>Места стоянки воздушных судов</strong></td><td class="old">ограниченно</td><td class="new">18</td></tr>
+          <tr><td><strong>Аэровокзал</strong></td><td class="old">150–200 пасс./час (оценка)</td><td class="new">300 пасс./час</td></tr>
+          <tr><td><strong>Годовая ёмкость терминала</strong></td><td class="old">≈ 350–450 тыс. пасс.</td><td class="new">≈ 1,0–1,3 млн пасс.</td></tr>
+          <tr><td><strong>Грузовой терминал</strong></td><td class="old">отдельного современного нет</td><td class="new">терминал, грузовой двор, КПП с автовесами</td></tr>
+          <tr><td><strong>Топливозаправочный комплекс</strong></td><td class="old">существующий</td><td class="new">новый, 1,7 тыс. тонн</td></tr>
+          <tr><td><strong>Ангар для воздушных судов</strong></td><td class="old">ограниченные возможности</td><td class="new">ангарный комплекс</td></tr>
+          <tr><td><strong>Средства РТОП</strong></td><td class="old">устаревшие</td><td class="new">современные, Госкорпорация по ОрВД</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ ПЕРЕХОД ══════════ -->
+<section id="transition">
+  <div class="wrap">
+    <div class="sechead"><span class="secnum">04</span><h2>Трудности перехода</h2></div>
+    <p class="lede">Девять блоков. Первые три определяют, состоится ли переход в срок; остальные — с какими потерями он пройдёт.</p>
+
+    <div class="blocks">
+      <div class="block"><b>Сертификация и разрешительная документация</b><span>Регистрация аэродрома в реестре, сертификат оператора, схемы маневрирования, публикация в AIP, допуск ТЗК, аттестация аварийно-спасательного обеспечения, транспортная безопасность.</span></div>
+      <div class="block"><b>Аэронавигация и лётная эксплуатация</b><span>Новые координаты и схемы, карта препятствий с учётом отвалов и горных работ, переучивание экипажей всех перевозчиков, установление приаэродромной территории и её подзон.</span></div>
+      <div class="block"><b>Логистика «дня Х»</b><span>Выбор сценария и даты, перечень единичного оборудования, план отката с письменными критериями, две репетиции, штаб перехода на 72 часа.</span></div>
+      <div class="block"><b>Персонал</b><span>606 человек, площадка дальше от города, сменный график и ночные смены, новое оборудование и допуски, удержание 20–40 ключевых специалистов, кадровый рынок города на 34 тыс. жителей.</span></div>
+      <div class="block"><b>Информационные системы и связь</b><span>Регистрация, табло, обработка багажа, СКУД, весовое хозяйство. Два независимых канала связи, отработанные ручные процедуры, отказ от одновременной миграции систем и переезда.</span></div>
+      <div class="block"><b>Спецтехника, СНО и топливо</b><span>Расчёт парка уборочной техники по фактической площади новых покрытий, закупка за 6–12 месяцев, схема зимнего содержания с учётом новой розы ветров, перекачка остатков со старого ТЗК.</span></div>
+      <div class="block"><b>Вечная мерзлота</b><span>Термостабилизация как эксплуатируемая система, геодезический мониторинг реперов весной и осенью, резерв на ремонт покрытий с третьего года эксплуатации.</span></div>
+      <div class="block"><b>Экономика эксплуатации</b><span>Рост постоянных затрат в разы в день ввода, новые статьи — амортизация, налог на имущество, мониторинг. Тарифное обоснование готовится за 9–12 месяцев до ввода.</span></div>
+      <div class="block"><b>Старая площадка и город</b><span>Решение о судьбе актива до переезда, транспортная схема для персонала и пассажиров, информационная кампания за 2–3 месяца, волонтёры-навигаторы в первые недели.</span></div>
+    </div>
+
+    <h3>Как переезжать: три сценария</h3>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Сценарий</th><th>Суть</th><th>Сильная сторона</th><th>Слабая сторона</th><th>Оценка</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>A. Одномоментный</strong></td>
+            <td>Последний рейс на старой площадке — первый на новой</td>
+            <td>Просто и дёшево, нет двойных затрат</td>
+            <td>Нет отката: любой сбой останавливает авиасообщение города</td>
+            <td><span class="chip c">высокий риск</span></td>
+          </tr>
+          <tr>
+            <td><strong>B. Параллельная работа</strong></td>
+            <td>Оба аэродрома работают одновременно</td>
+            <td>Максимальная надёжность</td>
+            <td>Двойной штат и сертификаты; по многим службам физически невозможно — один комплект техники и людей</td>
+            <td><span class="chip w">дорого</span></td>
+          </tr>
+          <tr>
+            <td><strong>C. Переход и горячий резерв</strong></td>
+            <td>Переход за одну ночь; старая площадка 30–90 суток готова принять рейс</td>
+            <td>Баланс надёжности и стоимости</td>
+            <td>Требует минимального содержания старой площадки</td>
+            <td><span class="chip g">рекомендуется</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="verdict">
+      <span class="tag">Обязательные элементы сценария C</span>
+      <p>Окно в одну ночь вне зимы и вне пика — оптимально вторая половина апреля или сентябрь, в середине недели. Перечень единичных позиций оборудования, которое не может работать на двух площадках сразу, с решением по каждой. Две репетиции: настольная с разбором отказов и натурная — полный цикл обслуживания рейса с массовкой, включая нештатную ситуацию. Письменные критерии возврата рейсов на старую площадку и тот, кто принимает это решение.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ РИСКИ ══════════ -->
+<section id="risks">
+  <div class="wrap">
+    <div class="sechead"><span class="secnum">05</span><h2>Риски и узкие места</h2></div>
+    <p class="lede">Ранг — произведение вероятности и влияния по шкале от единицы до пяти. Ниже — пять рисков красной зоны, которыми имеет смысл управлять на уровне первого руководителя.</p>
+
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Ранг</th><th>Риск</th><th>Меры снижения</th></tr></thead>
+        <tbody>
+          <tr><td class="num"><span class="chip c">20</span></td><td><strong>Рост затрат без роста доходов в первые два года</strong></td><td>Модель операционных затрат до ввода, защищённый бюджет переходного периода, модульная эксплуатация терминала, ранний пересмотр тарифов</td></tr>
+          <tr><td class="num"><span class="chip c">20</span></td><td><strong>Готовность лётного поля не позволит уложиться в срок</strong></td><td>Отдельный критический путь с еженедельным контролем, сезонное планирование работ, резервный график</td></tr>
+          <tr><td class="num"><span class="chip c">20</span></td><td><strong>Разрешительные процедуры не завершены к строительной готовности</strong></td><td>Сетевой график сертификации с привязкой к AIRAC, персональная ответственность на уровне заместителя руководителя, ранняя подготовка документов</td></tr>
+          <tr><td class="num"><span class="chip c">20</span></td><td><strong>Сокращение инвестпрограммы АЛРОСА и кризис алмазного рынка</strong></td><td>Диверсификация спроса за пределы АЛРОСА, рост доли груза, долгосрочные соглашения об объёмах перевозок</td></tr>
+          <tr><td class="num"><span class="chip w">16</span></td><td><strong>Дефицит и отток квалифицированного персонала</strong></td><td>Программа удержания ключевых специалистов, обучение за 12 месяцев до ввода, транспортная схема и социальный пакет</td></tr>
+          <tr><td class="num"><span class="chip w">16</span></td><td><strong>Сбой в первые дни эксплуатации: ИТ, питание, досмотр, багаж</strong></td><td>Сценарий с горячим резервом, натурные репетиции, ручные процедуры, штаб перехода</td></tr>
+          <tr><td class="num"><span class="chip w">15</span></td><td><strong>Деформация покрытий из-за изменения геокриологических условий</strong></td><td>Геотехнический мониторинг с первого года, резерв на ремонт с третьего, договор с профильным институтом</td></tr>
+          <tr><td class="num"><span class="chip w">15</span></td><td><strong>Недостаток аэродромной спецтехники для увеличенной площади</strong></td><td>Расчёт потребности по фактической площади покрытий, закупка за 6–12 месяцев, обкатка персонала</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Узкие места</h3>
+    <div class="grid g2">
+      <article class="card">
+        <span class="tag">Период ввода</span>
+        <p><strong>Готовность лётного поля</strong> · средства РТОП и лётная проверка · <strong>цикл AIRAC</strong> — публикация возможна только в фиксированные даты · транспортная безопасность: категорирование и план ОТБ · единичная спецтехника и досмотровое оборудование, которое не может работать на двух площадках одновременно.</p>
+      </article>
+      <article class="card">
+        <span class="tag">Постоянная эксплуатация</span>
+        <p><strong>Спрос, а не мощность</strong> — впервые в истории аэропорта ограничителем станет не инфраструктура · зимнее содержание увеличенной площади покрытий · ёмкость ТЗК и логистика завоза топлива · маршрутная сеть и интерес перевозчиков · отсутствие международного пункта пропуска · кадровый рынок города на 34 тыс. жителей · конкуренция автодороги и реки за груз.</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ ЦЕЛЕСООБРАЗНОСТЬ ══════════ -->
+<section id="viability">
+  <div class="wrap">
+    <div class="sechead"><span class="secnum">06</span><h2>Целесообразность проекта</h2></div>
+    <p class="lede">Проект завершён более чем на 90 % по наземной части. Спор о том, стоило ли начинать, имеет ценность только как источник уроков. Практически значимых вопросов два: как минимизировать убыток переходного периода и как загрузить созданную мощность.</p>
+
+    <div class="pro-con">
+      <div class="pc yes">
+        <h4>Аргументы за</h4>
+        <ul>
+          <li>Ресурс действующих объектов исчерпан; реконструкция на месте была признана нецелесообразной</li>
+          <li>Безопасность полётов: новые схемы, современные средства РТОП, новая аварийно-спасательная станция</li>
+          <li>Снятие ограничений по типам воздушных судов: новое покрытие и перрон на 18 мест</li>
+          <li>Более половины капитальных затрат — федеральные; лётное поле не обременяет баланс предприятия</li>
+          <li>Функция жизнеобеспечения территории — это не коммерческий выбор</li>
+          <li>Стратегическая роль: запасной аэродром на кроссполярном маршруте Polar 3</li>
+          <li>Впервые появляется полноценная грузовая инфраструктура — главный коммерческий актив проекта</li>
+        </ul>
+      </div>
+      <div class="pc no">
+        <h4>Объективные слабости</h4>
+        <ul>
+          <li>Трёх-четырёхкратный избыток пассажирской мощности</li>
+          <li>Стагнирующий спрос и сокращающееся население города</li>
+          <li>Зависимость от одного заказчика: проект «Мир-Глубокий» замедляется</li>
+          <li>Постоянные затраты растут немедленно, доходы — с задержкой</li>
+          <li>Три переноса сроков: удорожание, упущенная выгода, репутационные издержки</li>
+          <li>Геокриологическая неопределённость — дополнительные расходы на весь срок службы</li>
+          <li>Отсутствие публичной стратегии загрузки построенной мощности</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="verdict">
+      <span class="tag">Итог</span>
+      <p>Проект оправдан как инфраструктурный и социальный, но не самоокупаем как коммерческий в существующей модели спроса. Задача менеджмента — перевести его из категории «дорогая необходимость» в категорию «многофункциональная платформа», зарабатывающая не только на пассажире.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ РОСТ ══════════ -->
+<section id="growth">
+  <div class="wrap">
+    <div class="sechead"><span class="secnum">07</span><h2>Как нарастить поток</h2></div>
+    <p class="lede">Аэропорт не продаёт билеты и не управляет спросом напрямую. Он управляет тремя вещами: стоимостью работы перевозчика на своей площадке, удобством для пассажира и собственной активностью в привлечении рейсов.</p>
+
+    <h3>Пассажиры</h3>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Мера</th><th>Содержание</th><th>Эффект, пасс./год</th><th>Затраты</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Стимулирующие тарифы для новых рейсов</strong></td><td>Скидка 50–70 % на сборы в первый год, 30 % во второй. При загрузке 35 % предельные затраты на дополнительный рейс близки к нулю — скидка не потеря, а плата за заполнение пустующей мощности</td><td class="num">+20…50 тыс.</td><td class="old">низкие</td></tr>
+          <tr><td><strong>Расширение перечня субсидируемых маршрутов</strong></td><td>Мирный уже включён Росавиацией в перечень субсидируемых направлений на 2026 год. Ежегодно подавать обоснованные заявки совместно с правительством Республики и перевозчиками</td><td class="num">+15…40 тыс. на маршрут</td><td class="old">минимальные</td></tr>
+          <tr><td><strong>Долгосрочное соглашение с АЛРОСА</strong></td><td>Гарантированные объёмы на 3–5 лет как база, под которую авиакомпании готовы ставить борта. Привязка расписания к графику вахтовых пересменок</td><td class="num">стабилизация базы</td><td class="old">минимальные</td></tr>
+          <tr><td><strong>Локальный пересадочный узел Западной Якутии</strong></td><td>Стыковочные «волны» и сквозная регистрация багажа: из посёлка в Москву через Мирный за одну пересадку, минуя Якутск. Транзитный пассажир загружает терминал, не нагружая город, и больше тратит в нём</td><td class="num">+30…70 тыс.</td><td class="old">средние</td></tr>
+          <tr><td><strong>Новые межрегиональные направления</strong></td><td>Санкт-Петербург, усиление Красноярска и Новосибирска, Владивосток и Хабаровск, Тюмень и Екатеринбург, сезонно — юг. Плюс медицинская маршрутизация и образовательная миграция</td><td class="num">+40…100 тыс.</td><td class="old">средние</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="marks"><b>Суммарно:</b> рост с ≈ 350 до 500–600 тыс. пасс./год за 5–7 лет — это 50–60 % загрузки терминала.</p>
+
+    <h3>Груз — единственный сегмент с кратным потенциалом</h3>
+    <div class="grid g3">
+      <article class="card key">
+        <span class="tag">Приоритет</span>
+        <h4>Консолидация грузопотока АЛРОСА</h4>
+        <p>Грузовой терминал Мирного как единая точка входа для всех авиагрузов алмазной провинции. Ответственное хранение аварийного запаса запчастей для рудников — там, где при поломке оборудования счёт идёт на часы. Рост на 30–60 % к базе без единого нового клиента.</p>
+      </article>
+      <article class="card key">
+        <span class="tag">Приоритет</span>
+        <h4>Хаб северного завоза</h4>
+        <p>Значительная часть грузов идёт сезонно — рекой через Ленск и автозимниками. Межнавигационный период — окно, где авиация безальтернативна. Накопление груза круглый год, премиальный тариф за срочность в распутицу, статус объекта опорной логистической сети.</p>
+      </article>
+      <article class="card key">
+        <span class="tag">Приоритет</span>
+        <h4>Экспресс-доставка и e-commerce</h4>
+        <p>Распределительный пункт маркетплейса на территории грузового терминала, почтово-грузовой сервис, пункт выдачи заказов. Стабильный поток мелких партий с высокой удельной доходностью и без зависимости от промышленного цикла — лучшая диверсификация.</p>
+      </article>
+      <article class="card">
+        <span class="tag">Средний горизонт</span>
+        <h4>Регулярный грузовой рейс</h4>
+        <p>Предсказуемость важнее цены для промышленного грузоотправителя. Плюс негабарит и тяжеловесы для горнодобывающих предприятий, а также спецгрузы с допусками — сегменты, закрытые для конкурентов без этих допусков.</p>
+      </article>
+      <article class="card">
+        <span class="tag">Средний горизонт</span>
+        <h4>Холодовая цепь</h4>
+        <p>Камеры разных температурных режимов, ветеринарный и фитосанитарный контроль, работа с торговыми сетями района. В обратную сторону — рыба, дикоросы, оленина.</p>
+      </article>
+      <article class="card">
+        <span class="tag">Стратегический горизонт</span>
+        <h4>Технические посадки и дозаправка</h4>
+        <p>Мирный — запасной аэродром на трансконтинентальных маршрутах Северная Америка — Азия и на кроссполярном маршруте Polar 3. Одна посадка тяжёлого грузового борта с заправкой по доходности эквивалентна сотням пассажиров. Требует ёмкости ТЗК, конкурентной цены топлива и пункта пропуска.</p>
+      </article>
+    </div>
+    <p class="marks"><b>Суммарно:</b> рост грузопотока в 2–3 раза за 5–7 лет. Для груза это достижимо, в отличие от пассажиров.</p>
+  </div>
+</section>
+
+<!-- ══════════ ДОХОДЫ ══════════ -->
+<section id="revenue">
+  <div class="wrap">
+    <div class="sechead"><span class="secnum">08</span><h2>На чём ещё зарабатывать</h2></div>
+    <p class="lede">Ключевая мысль: выручку можно удвоить, не удваивая пассажиропоток. Основной вклад дают груз, топливо, ангарные услуги и неавиационная выручка — а не рост числа пассажиров.</p>
+
+    <figure>
+      <p class="figtitle">Структура выручки: типичная сегодня и целевая через пять лет</p>
+      <p class="figsub">процентов от выручки предприятия</p>
+      <svg viewBox="0 0 640 230" role="img" aria-label="Сегодня: авиационные доходы 80 процентов, неавиационные 12, топливо и прочие услуги 8. Цель: 52, 23 и 25 процентов соответственно">
+        <text class="axis" x="0" y="34" fill="var(--ink-2)">Типично сегодня</text>
+        <rect x="0"   y="46" width="486" height="42" rx="4" fill="var(--c1)"></rect>
+        <rect x="490" y="46" width="69"  height="42" rx="4" fill="var(--c2)"></rect>
+        <rect x="563" y="46" width="45"  height="42" rx="4" fill="var(--c3)"></rect>
+        <text class="vlab vlab-on" x="243" y="72" text-anchor="middle">80 %</text>
+        <text class="vlab vlab-on" x="524" y="72" text-anchor="middle">12</text>
+        <text class="vlab vlab-on" x="585" y="72" text-anchor="middle">8</text>
+
+        <text class="axis" x="0" y="140" fill="var(--ink-2)">Цель через 5 лет</text>
+        <rect x="0"   y="152" width="312" height="42" rx="4" fill="var(--c1)"></rect>
+        <rect x="316" y="152" width="136" height="42" rx="4" fill="var(--c2)"></rect>
+        <rect x="456" y="152" width="152" height="42" rx="4" fill="var(--c3)"></rect>
+        <text class="vlab vlab-on" x="156" y="178" text-anchor="middle">52 %</text>
+        <text class="vlab vlab-on" x="384" y="178" text-anchor="middle">23 %</text>
+        <text class="vlab vlab-on" x="532" y="178" text-anchor="middle">25 %</text>
+
+        <text class="axis" x="0" y="222" fill="var(--muted)">Шкала: 608 пикселей = 100 % выручки в обеих строках</text>
+      </svg>
+      <div class="legend">
+        <span><i style="background:var(--c1)"></i>Авиационные доходы: сборы и наземное обслуживание</span>
+        <span><i style="background:var(--c2)"></i>Неавиационные доходы</span>
+        <span><i style="background:var(--c3)"></i>Топливообеспечение и прочие услуги</span>
+      </div>
+      <figcaption>Структура «сегодня» — типичные значения для регионального аэропорта до модернизации, а не отчётность предприятия. Каждый сегмент подписан значением, поэтому чтение не зависит от различения цветов.</figcaption>
+    </figure>
+
+    <h3>Приоритет первой волны — запуск в первые 3–18 месяцев</h3>
+    <div class="grid g3">
+      <article class="card key">
+        <span class="tag">01</span>
+        <h4>Топливообеспечение как бизнес</h4>
+        <p>Заправка сторонних перевозчиков на конкурентных условиях, заправка технических посадок, ответственное хранение топлива для третьих лиц, аттестованная лаборатория ГСМ, заправка вертолётной техники санавиации, МЧС, геологоразведки и лесоохраны. Отдельно проверить, достаточна ли ёмкость 1,7 тыс. тонн — расширение резервуарного парка может оказаться вложением с лучшей окупаемостью, чем что-либо ещё в проекте.</p>
+      </article>
+      <article class="card key">
+        <span class="tag">02</span>
+        <h4>Ангарный комплекс</h4>
+        <p>Отапливаемый ангар — редкий актив для Якутии. Хранение сторонних воздушных судов и вертолётов, отогрев и предполётная подготовка при −50 °C, покраска, мойка, взвешивание. При получении сертификата организации по техническому обслуживанию — линейное ТО сторонних перевозчиков вместо вывоза техники в Новосибирск и Иркутск.</p>
+      </article>
+      <article class="card key">
+        <span class="tag">03</span>
+        <h4>Коммерческие площади терминала</h4>
+        <p>Площади рассчитаны на поток втрое больший текущего — эта «лишняя» площадь и есть товар. Кафе, торговля, фирменная продукция АЛРОСА с алмазной тематикой, аптека, банковские сервисы, постаматы, камеры хранения. Арендаторов заводить до открытия: пустой терминал в первый год отпугнёт их надолго, и вернуть их потом будет дороже.</p>
+      </article>
+    </div>
+
+    <h3>Приоритет второй волны — горизонт от года до пяти лет</h3>
+    <div class="blocks">
+      <div class="block"><b>Платные сервисы пассажирам</b><span>Бизнес-зал, отдельный зал для вахтовых бригад с оплатой работодателем, упаковка багажа, ускоренный проход, платная парковка с абонементами, переговорные комнаты.</span></div>
+      <div class="block"><b>Гостиница при аэропорте</b><span>Семь километров до города, задержки рейсов и метеоусловия Якутии делают комнаты отдыха востребованными и высокодоходными.</span></div>
+      <div class="block"><b>Деловая авиация</b><span>Отдельный вход и зал, стоянка и ангарное хранение, обслуживание экипажей, кейтеринг, трансфер. Доходность одного бизнес-джета несопоставима с доходностью одного пассажира регулярного рейса.</span></div>
+      <div class="block"><b>Аутсорсинг компетенций</b><span>Наземное обслуживание сторонних перевозчиков и чартеров, противообледенительная обработка, аренда аэродромной и погрузочной техники в непиковое время — дефицитный ресурс в регионе.</span></div>
+      <div class="block"><b>Учебный центр</b><span>Подготовка по опасным грузам и транспортной безопасности, водители спецтранспорта с допуском на перрон, тренировки аварийно-спасательных расчётов — для себя и для сторонних организаций региона.</span></div>
+      <div class="block"><b>Монетизация старой площадки</b><span>Вертолётный центр для санавиации, МЧС и геологоразведки, складской комплекс, авиационно-техническая база, полигон подготовки расчётов, площадка испытаний техники в условиях Крайнего Севера.</span></div>
+      <div class="block"><b>Привокзальная территория, реклама, энергоресурсы</b><span>АЗС и автосервис на подъездной дороге, аренда помещений, рекламные поверхности, продажа тепла и электроэнергии резидентам — инженерные сети строились с тем же трёхкратным запасом, что и терминал.</span></div>
+      <div class="block"><b>Международный пункт пропуска</b><span>Открывает международные грузовые чартеры и технические посадки, обработку международных грузов, полноценное использование положения на кроссполярных маршрутах. Процедура длительная — начинать проработку следует уже сейчас.</span></div>
+    </div>
+
+    <div class="verdict">
+      <span class="tag">Иллюстративная модель</span>
+      <p>При потоке 350 тыс. пасс. и типичных ставках выручка предприятия (без ГСМ) составляет порядка 795 млн руб. в год. При 450 тыс. пасс., 12 тыс. тонн груза, неавиационной выручке 900 руб. на пассажира и новых услугах — около 1 654 млн руб. Все допущения модели указаны явно и подлежат замене на фактические данные предприятия.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ ДОРОЖНАЯ КАРТА ══════════ -->
+<section id="road">
+  <div class="wrap">
+    <div class="sechead"><span class="secnum">09</span><h2>Дорожная карта</h2></div>
+    <p class="lede">Этапы упорядочены по времени: каждый следующий опирается на решения предыдущего. Это настоящая последовательность, а не рубрикация для наглядности.</p>
+
+    <div class="road">
+      <div class="stage">
+        <div class="st">Этап 0</div>
+        <h4>До ввода</h4>
+        <ul>
+          <li>Сетевой график разрешительных процедур</li>
+          <li>Сценарий перехода и план отката</li>
+          <li>Перечень единичных позиций оборудования</li>
+          <li>Расчёт персонала и спецтехники, закупка</li>
+          <li>Модель затрат и бюджет переходного периода</li>
+          <li>Привлечение арендаторов до открытия</li>
+          <li>Решение о судьбе старой площадки</li>
+        </ul>
+      </div>
+      <div class="stage">
+        <div class="st">Этап 1</div>
+        <h4>Переход и 90 дней</h4>
+        <ul>
+          <li>Штаб перехода, первые 72 часа круглосуточно</li>
+          <li>Горячий резерв старой площадки 30–90 суток</li>
+          <li>Ежедневный разбор инцидентов</li>
+          <li>Коммерческие точки открываются вместе с терминалом</li>
+          <li>Платная парковка с первого дня</li>
+          <li>Фиксация фактических затрат для модели</li>
+        </ul>
+      </div>
+      <div class="stage">
+        <div class="st">Этапы 2–3</div>
+        <h4>Годы 1–3</h4>
+        <ul>
+          <li>Первая зима: контроль покрытий и систем</li>
+          <li>Стимулирующие тарифы, соглашение с АЛРОСА</li>
+          <li>Консолидация грузов, регулярный грузовой рейс</li>
+          <li>Стыковочные волны и сквозная регистрация</li>
+          <li>Сертификат на техобслуживание, деловая авиация</li>
+          <li>Учебный центр, перепрофилирование площадки</li>
+        </ul>
+      </div>
+      <div class="stage">
+        <div class="st">Этап 4</div>
+        <h4>Годы 4–7</h4>
+        <ul>
+          <li>Международный пункт пропуска</li>
+          <li>Технические посадки и дозаправка транзита</li>
+          <li>Гостиница и привокзальная территория</li>
+          <li>Статус объекта опорной сети северного завоза</li>
+          <li>500–600 тыс. пассажиров в год</li>
+          <li>Удвоение выручки предприятия</li>
+        </ul>
+      </div>
+    </div>
+
+    <h3>Что необходимо запросить внутри предприятия</h3>
+    <div class="prose">
+      <p>Эти данные превращают записку из аналитического текста в рабочий расчёт: нормативы пропускной способности действующего аэропорта; пассажиропоток помесячно за 2019–2026 гг. с разбивкой по направлениям и перевозчикам; грузо- и почтопоток в тоннах с разделением на коммерческий и корпоративный; количество самолёто-вылетов по типам ВС; структура выручки и затрат за три года; объём реализации авиатоплива и фактическая загрузка ТЗК; штатное расписание и текучесть по службам; перечень и состояние спецтехники; площади нового терминала с зонированием и указанием площадей под аренду; проектные решения по зонированию инженерных систем; план-график сертификационных мероприятий; стоимость и затраты на содержание старой площадки; доля корпоративных перевозок АЛРОСА; проект тарифов после ввода.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ ИСТОЧНИКИ ══════════ -->
+<section id="sources">
+  <div class="wrap">
+    <div class="sechead"><span class="secnum">10</span><h2>Источники</h2></div>
+    <p class="lede">Все данные — из открытых публикаций. Приведены по состоянию на даты публикаций.</p>
+
+    <div class="srcs">
+      <a href="https://yk24.ru/2026/09/gotovnost-aerovokzalnogo-kompleksa-v-mirnom-dostigla-90/" target="_blank" rel="noopener">Готовность аэровокзального комплекса в Мирном достигла 90 % — Якутия 24</a>
+      <a href="https://rg.ru/2026/08/11/reg-dfo/novyj-aeroport-v-iakutskom-mirnom-zarabotaet-v-2027-godu.html" target="_blank" rel="noopener">Новый аэропорт в якутском Мирном заработает в 2027 году — Российская газета</a>
+      <a href="https://www.interfax.ru/russia/1004988" target="_blank" rel="noopener">Ввод нового аэропорта в Мирном сдвинули на 2026–2027 год — Интерфакс</a>
+      <a href="https://yakutia.info/article/215556" target="_blank" rel="noopener">Долгострой: введут ли аэропорт «Мирный» в 2027 году — Якутия.Инфо</a>
+      <a href="https://yakutia.info/article/213362" target="_blank" rel="noopener">Новый аэропорт Мирного: задержки и амбиции — Якутия.Инфо</a>
+      <a href="https://aviation21.ru/novyj-aeroport-v-mirnom-zapustyat-v-2027-godu/" target="_blank" rel="noopener">Новый аэропорт в Мирном запустят в 2027 году — Авиация России</a>
+      <a href="https://ysia.ru/vzletno-posadochnuyu-polosu-vozvodyat-v-novom-aeroportu-mirnogo/" target="_blank" rel="noopener">Взлётно-посадочную полосу возводят в новом аэропорту Мирного — ЯСИА</a>
+      <a href="https://www.rzd-partner.ru/aviation/news/aeroport-mirnyy-v-yakutii-planiruyut-vvesti-v-ekspluatatsiyu-v-2026-2027-godakh/" target="_blank" rel="noopener">Аэропорт Мирный планируют ввести в 2026–2027 годах — РЖД-Партнёр</a>
+      <a href="https://almaz-media.tv/syuzhetyi/mirnyy/22161-stroim-na-veka-v-novom-ajeroportu-mirnogo-vnedrili-unikalnuju-tehnologiju-dlja-ustojchivosti-zdanij.html" target="_blank" rel="noopener">В новом аэропорту Мирного внедрили технологию устойчивости зданий — Алмазный край</a>
+      <a href="https://gkovd.ru/news/novosti-goskorporatsii/the-new-airport-in-mirny-will-be-equipped-with-modern-flight-radio-equipment/" target="_blank" rel="noopener">Новый аэропорт в Мирном оснастят современными средствами РТОП — Госкорпорация по ОрВД</a>
+      <a href="https://www.kommersant.ru/doc/3902577" target="_blank" rel="noopener">АЛРОСА построит аэропорт с запасом — Коммерсантъ</a>
+      <a href="https://www.alrosa.ru/press-center/news/2019/alrosa-vlozhit-v-stroitelstvo-novogo-aeroporta-v-mirnom-10-4-mlrd-rubley/" target="_blank" rel="noopener">АЛРОСА вложит в строительство нового аэропорта 10,4 млрд рублей — АЛРОСА</a>
+      <a href="https://realty.interfax.ru/ru/news/articles/119958" target="_blank" rel="noopener">Тендер на строительство терминала за 7,2 млрд рублей — Интерфакс-Недвижимость</a>
+      <a href="https://www.alrosa.ru/press-center/news/2018/aeroport-mirnyy-v-i-polugodii-2018-g-obsluzhil-bolee-157-7-tys-passazhirov/" target="_blank" rel="noopener">Аэропорт Мирный в I полугодии 2018 г. обслужил более 157,7 тыс. пассажиров — АЛРОСА</a>
+      <a href="https://ru.wikipedia.org/wiki/%D0%9C%D0%B8%D1%80%D0%BD%D1%8B%D0%B9_%28%D0%B0%D1%8D%D1%80%D0%BE%D0%BF%D0%BE%D1%80%D1%82%29" target="_blank" rel="noopener">Мирный (аэропорт) — характеристики ВПП, типы ВС — Википедия</a>
+      <a href="https://en.wikipedia.org/wiki/Mirny_Airport" target="_blank" rel="noopener">Mirny Airport — роль запасного на кроссполярных маршрутах</a>
+      <a href="https://www.interfax.ru/business/1093957" target="_blank" rel="noopener">АЛРОСА замедлит реализацию проекта восстановления рудника «Мир» — Интерфакс</a>
+      <a href="https://favt.gov.ru/dejatelnost-vozdushnye-perevozki-subsidirovanie-dal-vost/" target="_blank" rel="noopener">Субсидирование перевозок на Дальний Восток — Росавиация</a>
+      <a href="https://archi.ru/projects/russia/18154/aeroportovyi-kompleks-mirnyi" target="_blank" rel="noopener">Аэропортовый комплекс «Мирный» — проект бюро «Верста», Архи.ру</a>
+      <a href="https://base.garant.ru/55171087/53f89421bbdaf741eb2d1ecc4ddb4c33/" target="_blank" rel="noopener">Методика расчёта технической возможности аэропортов — приказ Минтранса № 63</a>
+    </div>
+
+    <div class="disclaimer">
+      <b>Границы анализа</b>
+      Записка подготовлена по общедоступным источникам. Автор не имеет доступа к проектной документации, договорам и внутренней статистике предприятия. Оценки пропускной способности действующего аэровокзала, грузооборота, структуры затрат и все финансовые расчёты — модельные, с явно указанными допущениями; они предназначены для проверки на фактических данных, а не для принятия решений в текущем виде. Непрерывного ряда пассажиропотока за 2022–2026 гг. в открытом доступе нет.
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <p>Аналитическая записка по новому аэропортовому комплексу «Мирный», Республика Саха (Якутия). Подготовлена 15 сентября 2026 года.</p>
+    <p>Полная версия с реестром из двадцати рисков, детальным разбором девяти блоков трудностей перехода, расчётом моделей и перечнем внутренних запросов — в сопровождающем документе и презентации.</p>
+  </div>
+</footer>
+
+<div id="tip" role="status" aria-live="polite"></div>
+
+<script>
+(function(){
+  var tip = document.getElementById('tip');
+  document.querySelectorAll('.bar[data-tip]').forEach(function(el){
+    el.addEventListener('pointerenter', function(e){
+      tip.textContent = el.getAttribute('data-tip');
+      tip.style.opacity = '1';
+      move(e);
+    });
+    el.addEventListener('pointermove', move);
+    el.addEventListener('pointerleave', function(){ tip.style.opacity = '0'; });
+  });
+  function move(e){
+    tip.style.left = e.clientX + 'px';
+    tip.style.top = e.clientY + 'px';
+  }
+})();
+</script>
